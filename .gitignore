@@ -1,0 +1,10 @@
+# List of files for git to ignore
+
+/bazel-*
+/build/
+/cmake-build-*/
+/.vscode
+
+.ipynb_checkpoints
+*.pyc
+*.tar
