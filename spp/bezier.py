@@ -342,11 +342,10 @@ class BezierSPP:
         self.ResetGraph([start, goal])
         return BezierTrajectory(path, time_traj), result, hard_result
 
-class BezierTrajectory(Trajectory):
+class BezierTrajectory:
     def __init__(self, path_traj, time_traj):
         assert path_traj.start_time() == time_traj.start_time()
         assert path_traj.end_time() == time_traj.end_time()
-        Trajectory.__init__(self)
         self.path_traj = path_traj
         self.time_traj = time_traj
         self.start_s = path_traj.start_time()
