@@ -38,18 +38,18 @@ from pydrake.trajectories import (
     Trajectory,
 )
 
-from spp_helpers import findEdgesViaOverlaps, findStartGoalEdges, solveSPP
+from spp.spp_helpers import findEdgesViaOverlaps, findStartGoalEdges, solveSPP
 
 class BezierSPP:
     def __init__(self, regions, order, continuity, weights, deriv_limits=None, edges=None):
         self.dimension = regions[0].ambient_dimension()
-        self.regions = regions
+        self.regions = regions.copy()
         self.order = order
         self.continuity = continuity
         self.weights = weights
-        self.solver = MosekSolver()
+        self.solver = None
         assert continuity < order
-        for r in regions:
+        for r in self.regions:
             assert r.ambient_dimension() == self.dimension
         if "time" in weights:
             assert isinstance(weights["time"], float) or isinstance(weights["time"], int)
@@ -73,7 +73,7 @@ class BezierSPP:
         b_time = np.concatenate((1000*np.ones(order + 1), np.zeros(order + 1), -1e-6 * np.ones(order)))
         self.time_scaling_set = HPolyhedron(A_time, b_time)
 
-        for r in regions:
+        for r in self.regions:
             self.spp.AddVertex(
                 r.CartesianPower(order + 1).CartesianProduct(self.time_scaling_set))
 
@@ -216,6 +216,9 @@ class BezierSPP:
             for d_con in self.deriv_constraints:
                 edge.AddConstraint(Binding[Constraint](d_con, u.x()))
 
+    def setSolver(self, solver):
+        self.solver = solver
+
     def ResetGraph(self, vertices):
         for v in vertices:
             self.spp.RemoveVertex(v)
@@ -226,7 +229,7 @@ class BezierSPP:
         graphviz = self.spp.GetGraphvizString(None, False)
         return pydot.graph_from_dot_data(graphviz)[0].create_svg()
 
-    def SolvePath(self, source, target, rounding=False, verbose=True, edges=None, velocity=None):
+    def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, velocity=None):
         assert len(source) == self.dimension
         assert len(target) == self.dimension
         if velocity is None:
@@ -343,6 +346,7 @@ class BezierTrajectory(Trajectory):
     def __init__(self, path_traj, time_traj):
         assert path_traj.start_time() == time_traj.start_time()
         assert path_traj.end_time() == time_traj.end_time()
+        Trajectory.__init__(self)
         self.path_traj = path_traj
         self.time_traj = time_traj
         self.start_s = path_traj.start_time()

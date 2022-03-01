@@ -14,13 +14,14 @@ from pydrake.solvers.mathematicalprogram import (
     LinearConstraint,
 )
 
-from spp_helpers import findEdgesViaOverlaps, findStartGoalEdges, solveSPP
+from spp.spp_helpers import findEdgesViaOverlaps, findStartGoalEdges, solveSPP
 
 class LinearSPP:
     def __init__(self, regions, edges=None):
         self.dimension = regions[0].ambient_dimension()
-        self.regions = regions
-        for r in regions:
+        self.regions = regions.copy()
+        self.solver = None
+        for r in self.regions:
             assert r.ambient_dimension() == self.dimension
 
         self.spp = GraphOfConvexSets()
@@ -28,7 +29,7 @@ class LinearSPP:
             np.hstack((-np.eye(self.dimension), np.eye(self.dimension))),
             np.zeros(self.dimension))
 
-        for r in regions:
+        for r in self.regions:
             self.spp.AddVertex(r)
 
         if edges is None:
@@ -49,6 +50,9 @@ class LinearSPP:
                                  u.set().b()),
                 v.x()))
 
+    def setSolver(self, solver):
+        self.solver = solver
+
     def ResetGraph(self, vertices):
         for v in vertices:
             self.spp.RemoveVertex(v)
@@ -59,7 +63,7 @@ class LinearSPP:
         graphviz = self.spp.GetGraphvizString(None, False)
         return pydot.graph_from_dot_data(graphviz)[0].create_svg()
 
-    def SolvePath(self, source, target, rounding=False, verbose=True, edges=None):
+    def SolvePath(self, source, target, rounding=False, verbose=False, edges=None):
         assert len(source) == self.dimension
         assert len(target) == self.dimension
 
@@ -97,7 +101,7 @@ class LinearSPP:
         # options.SetOption(GurobiSolver.id(), "TimeLimit", 30.)
 
         active_edges, result, hard_result = solveSPP(
-            self.spp, start, goal, rounding, None, None)
+            self.spp, start, goal, rounding, self.solver, None)
 
         if verbose:
             print("Solution\t",
