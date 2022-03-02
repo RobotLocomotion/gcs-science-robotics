@@ -38,7 +38,12 @@ from pydrake.trajectories import (
     Trajectory,
 )
 
-from spp.spp_helpers import findEdgesViaOverlaps, findStartGoalEdges, solveSPP
+from spp.spp_helpers import (
+    findEdgesViaOverlaps,
+    findStartGoalEdges,
+    greedyForwardPathSearch,
+    solveSPP,
+)
 
 class BezierSPP:
     def __init__(self, regions, order, continuity, weights, deriv_limits=None, edges=None):
@@ -48,6 +53,8 @@ class BezierSPP:
         self.continuity = continuity
         self.weights = weights
         self.solver = None
+        self.options = None
+        self.rounding_fn = greedyForwardPathSearch
         assert continuity < order
         for r in self.regions:
             assert r.ambient_dimension() == self.dimension
@@ -219,6 +226,19 @@ class BezierSPP:
     def setSolver(self, solver):
         self.solver = solver
 
+    def setSolverOptions(self, options):
+        self.options = options
+
+    def setPaperSolverOptions(self):
+        self.options = SolverOptions()
+        self.options.SetOption(CommonSolverOption.kPrintToConsole, 1)
+        self.options.SetOption(MosekSolver.id(), "MSK_DPAR_INTPNT_CO_TOL_REL_GAP", 1e-3)
+        self.options.SetOption(MosekSolver.id(), "MSK_IPAR_INTPNT_SOLVE_FORM", 1)
+        self.options.SetOption(MosekSolver.id(), "MSK_DPAR_MIO_TOL_REL_GAP", 1e-3)
+
+    def setRoundingStrategy(self, rounding_fn):
+        self.rounding_fn = rounding_fn
+
     def ResetGraph(self, vertices):
         for v in vertices:
             self.spp.RemoveVertex(v)
@@ -281,16 +301,8 @@ class BezierSPP:
         if not source_connected or not target_connected:
             print("Source connected:", source_connected, "Target connected:", target_connected)
 
-        options = SolverOptions()
-        options.SetOption(CommonSolverOption.kPrintToConsole, 1)
-        options.SetOption(MosekSolver.id(), "MSK_DPAR_INTPNT_CO_TOL_REL_GAP", 1e-3)
-        options.SetOption(MosekSolver.id(), "MSK_IPAR_INTPNT_SOLVE_FORM", 1)
-        options.SetOption(MosekSolver.id(), "MSK_DPAR_MIO_TOL_REL_GAP", 1e-3)
-        # options.SetOption(GurobiSolver.id(), "MIPGap", 0.01)
-        # options.SetOption(GurobiSolver.id(), "TimeLimit", 30.)
-
         active_edges, result, hard_result = solveSPP(
-            self.spp, start, goal, rounding, self.solver, options)
+            self.spp, start, goal, rounding, self.solver, self.options, self.rounding_fn)
 
         if verbose:
             print("Solution\t",

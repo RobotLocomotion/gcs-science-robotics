@@ -14,13 +14,20 @@ from pydrake.solvers.mathematicalprogram import (
     LinearConstraint,
 )
 
-from spp.spp_helpers import findEdgesViaOverlaps, findStartGoalEdges, solveSPP
+from spp.spp_helpers import (
+    findEdgesViaOverlaps,
+    findStartGoalEdges,
+    greedyForwardPathSearch,
+    solveSPP,
+)
 
 class LinearSPP:
     def __init__(self, regions, edges=None):
         self.dimension = regions[0].ambient_dimension()
         self.regions = regions.copy()
         self.solver = None
+        self.options = None
+        self.rounding_fn = greedyForwardPathSearch
         for r in self.regions:
             assert r.ambient_dimension() == self.dimension
 
@@ -52,6 +59,17 @@ class LinearSPP:
 
     def setSolver(self, solver):
         self.solver = solver
+
+    def setSolverOptions(self, options):
+        self.options = options
+
+        # options = SolverOptions()
+        # # options.SetOption(CommonSolverOption.kPrintToConsole, 1)
+        # options.SetOption(GurobiSolver.id(), "MIPGap", 0.01)
+        # options.SetOption(GurobiSolver.id(), "TimeLimit", 30.)
+
+    def setRoundingStrategy(self, rounding_fn):
+        self.rounding_fn = rounding_fn
 
     def ResetGraph(self, vertices):
         for v in vertices:
@@ -95,13 +113,8 @@ class LinearSPP:
         if not source_connected or not target_connected:
             print("Source connected:", source_connected, "Target connected:", target_connected)
 
-        # options = SolverOptions()
-        # # options.SetOption(CommonSolverOption.kPrintToConsole, 1)
-        # options.SetOption(GurobiSolver.id(), "MIPGap", 0.01)
-        # options.SetOption(GurobiSolver.id(), "TimeLimit", 30.)
-
         active_edges, result, hard_result = solveSPP(
-            self.spp, start, goal, rounding, self.solver, None)
+            self.spp, start, goal, rounding, self.solver, self.options, self.rounding_fn)
 
         if verbose:
             print("Solution\t",
