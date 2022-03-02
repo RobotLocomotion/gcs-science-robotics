@@ -4,7 +4,6 @@ import time
 from scipy.optimize import root_scalar
 
 from pydrake.geometry.optimization import (
-    GraphOfConvexSets,
     HPolyhedron,
     Point,
 )
@@ -15,7 +14,6 @@ from pydrake.math import (
 )
 from pydrake.solvers.mathematicalprogram import(
     Binding,
-    CommonSolverOption,
     Constraint,
     Cost,
     L2NormCost,
@@ -23,9 +21,7 @@ from pydrake.solvers.mathematicalprogram import(
     LinearCost,
     LinearEqualityConstraint,
     PerspectiveQuadraticCost,
-    SolverOptions,
 )
-from pydrake.solvers.mosek import MosekSolver
 from pydrake.symbolic import (
     DecomposeLinearExpressions,
     Expression,
@@ -38,26 +34,16 @@ from pydrake.trajectories import (
     Trajectory,
 )
 
-from spp.spp_helpers import (
-    findEdgesViaOverlaps,
-    findStartGoalEdges,
-    greedyForwardPathSearch,
-    solveSPP,
-)
+from spp.base import BaseSPP
 
-class BezierSPP:
+class BezierSPP(BaseSPP):
     def __init__(self, regions, order, continuity, weights, deriv_limits=None, edges=None):
-        self.dimension = regions[0].ambient_dimension()
-        self.regions = regions.copy()
+        BaseSPP.__init__(self, regions)
+
         self.order = order
         self.continuity = continuity
         self.weights = weights
-        self.solver = None
-        self.options = None
-        self.rounding_fn = greedyForwardPathSearch
         assert continuity < order
-        for r in self.regions:
-            assert r.ambient_dimension() == self.dimension
         if "time" in weights:
             assert isinstance(weights["time"], float) or isinstance(weights["time"], int)
         if "norm" in weights:
@@ -72,8 +58,6 @@ class BezierSPP:
             assert deriv_limits.shape[0] == 1
             assert deriv_limits.shape[1] == 2
             assert deriv_limits.shape[2] == self.dimension
-
-        self.spp = GraphOfConvexSets()
 
         A_time = np.vstack((np.eye(order + 1), -np.eye(order + 1),
                             np.eye(order, order + 1) - np.eye(order, order + 1, 1)))
@@ -205,7 +189,7 @@ class BezierSPP:
 
         # Add edges to graph and apply costs/constraints
         if edges is None:
-            edges = findEdgesViaOverlaps(self.regions)
+            edges = self.findEdgesViaOverlaps()
 
         vertices = self.spp.Vertices()
         for ii, jj in edges:
@@ -223,32 +207,6 @@ class BezierSPP:
             for d_con in self.deriv_constraints:
                 edge.AddConstraint(Binding[Constraint](d_con, u.x()))
 
-    def setSolver(self, solver):
-        self.solver = solver
-
-    def setSolverOptions(self, options):
-        self.options = options
-
-    def setPaperSolverOptions(self):
-        self.options = SolverOptions()
-        self.options.SetOption(CommonSolverOption.kPrintToConsole, 1)
-        self.options.SetOption(MosekSolver.id(), "MSK_DPAR_INTPNT_CO_TOL_REL_GAP", 1e-3)
-        self.options.SetOption(MosekSolver.id(), "MSK_IPAR_INTPNT_SOLVE_FORM", 1)
-        self.options.SetOption(MosekSolver.id(), "MSK_DPAR_MIO_TOL_REL_GAP", 1e-3)
-
-    def setRoundingStrategy(self, rounding_fn):
-        self.rounding_fn = rounding_fn
-
-    def ResetGraph(self, vertices):
-        for v in vertices:
-            self.spp.RemoveVertex(v)
-        for edge in self.spp.Edges():
-            edge.ClearPhiConstraints()
-
-    def VisualizeGraph(self):
-        graphviz = self.spp.GetGraphvizString(None, False)
-        return pydot.graph_from_dot_data(graphviz)[0].create_svg()
-
     def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, velocity=None):
         assert len(source) == self.dimension
         assert len(target) == self.dimension
@@ -258,14 +216,12 @@ class BezierSPP:
 
         vertices = self.spp.Vertices()
         # Add edges connecting source and target to graph
-        source_region = Point(source)
-        target_region = Point(target)
-        start = self.spp.AddVertex(source_region, "start")
-        goal = self.spp.AddVertex(target_region, "goal")
+        start = self.spp.AddVertex(Point(source), "start")
+        goal = self.spp.AddVertex(Point(target), "goal")
 
         # Add edges connecting source and target to graph
         if edges is None:
-            edges = findStartGoalEdges(self.regions, source, target)
+            edges = self.findStartGoalEdges(source, target)
         source_connected = (len(edges[0]) > 0)
         target_connected = (len(edges[1]) > 0)
 
@@ -301,8 +257,7 @@ class BezierSPP:
         if not source_connected or not target_connected:
             print("Source connected:", source_connected, "Target connected:", target_connected)
 
-        active_edges, result, hard_result = solveSPP(
-            self.spp, start, goal, rounding, self.solver, self.options, self.rounding_fn)
+        active_edges, result, hard_result = self.solveSPP(start, goal, rounding)
 
         if verbose:
             print("Solution\t",

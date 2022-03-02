@@ -3,7 +3,6 @@ import pydot
 import time
 
 from pydrake.geometry.optimization import (
-    GraphOfConvexSets,
     Point,
 )
 from pydrake.solvers.mathematicalprogram import (
@@ -14,24 +13,12 @@ from pydrake.solvers.mathematicalprogram import (
     LinearConstraint,
 )
 
-from spp.spp_helpers import (
-    findEdgesViaOverlaps,
-    findStartGoalEdges,
-    greedyForwardPathSearch,
-    solveSPP,
-)
+from spp.base import BaseSPP
 
-class LinearSPP:
+class LinearSPP(BaseSPP):
     def __init__(self, regions, edges=None):
-        self.dimension = regions[0].ambient_dimension()
-        self.regions = regions.copy()
-        self.solver = None
-        self.options = None
-        self.rounding_fn = greedyForwardPathSearch
-        for r in self.regions:
-            assert r.ambient_dimension() == self.dimension
+        BaseSPP.__init__(self, regions)
 
-        self.spp = GraphOfConvexSets()
         self.edge_cost = L2NormCost(
             np.hstack((-np.eye(self.dimension), np.eye(self.dimension))),
             np.zeros(self.dimension))
@@ -40,7 +27,7 @@ class LinearSPP:
             self.spp.AddVertex(r)
 
         if edges is None:
-            edges = findEdgesViaOverlaps(self.regions)
+            edges = self.findEdgesViaOverlaps()
 
         vertices = self.spp.Vertices()
         for ii, jj in edges:
@@ -57,30 +44,6 @@ class LinearSPP:
                                  u.set().b()),
                 v.x()))
 
-    def setSolver(self, solver):
-        self.solver = solver
-
-    def setSolverOptions(self, options):
-        self.options = options
-
-        # options = SolverOptions()
-        # # options.SetOption(CommonSolverOption.kPrintToConsole, 1)
-        # options.SetOption(GurobiSolver.id(), "MIPGap", 0.01)
-        # options.SetOption(GurobiSolver.id(), "TimeLimit", 30.)
-
-    def setRoundingStrategy(self, rounding_fn):
-        self.rounding_fn = rounding_fn
-
-    def ResetGraph(self, vertices):
-        for v in vertices:
-            self.spp.RemoveVertex(v)
-        for edge in self.spp.Edges():
-            edge.ClearPhiConstraints()
-
-    def VisualizeGraph(self):
-        graphviz = self.spp.GetGraphvizString(None, False)
-        return pydot.graph_from_dot_data(graphviz)[0].create_svg()
-
     def SolvePath(self, source, target, rounding=False, verbose=False, edges=None):
         assert len(source) == self.dimension
         assert len(target) == self.dimension
@@ -92,7 +55,7 @@ class LinearSPP:
 
         # Add edges connecting source and target to graph
         if edges is None:
-            edges = findStartGoalEdges(self.regions, source, target)
+            edges = self.findStartGoalEdges(source, target)
         source_connected = (len(edges[0]) > 0)
         target_connected = (len(edges[1]) > 0)
 
@@ -113,8 +76,7 @@ class LinearSPP:
         if not source_connected or not target_connected:
             print("Source connected:", source_connected, "Target connected:", target_connected)
 
-        active_edges, result, hard_result = solveSPP(
-            self.spp, start, goal, rounding, self.solver, self.options, self.rounding_fn)
+        active_edges, result, hard_result = self.solveSPP(start, goal, rounding)
 
         if verbose:
             print("Solution\t",
