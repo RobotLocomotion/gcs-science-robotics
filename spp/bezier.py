@@ -37,27 +37,12 @@ from pydrake.trajectories import (
 from spp.base import BaseSPP
 
 class BezierSPP(BaseSPP):
-    def __init__(self, regions, order, continuity, weights, deriv_limits=None, edges=None):
+    def __init__(self, regions, order, continuity, edges=None):
         BaseSPP.__init__(self, regions)
 
         self.order = order
         self.continuity = continuity
-        self.weights = weights
         assert continuity < order
-        if "time" in weights:
-            assert isinstance(weights["time"], float) or isinstance(weights["time"], int)
-        if "norm" in weights:
-            assert len(weights["norm"]) < order + 1
-        if "integral_norm" in weights:
-            assert len(weights["integral_norm"]) < order + 1
-        if "norm_squared" in weights:
-            assert len(weights["norm_squared"]) < order + 1
-            assert len(weights["norm_squared"]) <= 1
-        if deriv_limits is not None:
-            assert len(deriv_limits.shape) == 3
-            assert deriv_limits.shape[0] == 1
-            assert deriv_limits.shape[1] == 2
-            assert deriv_limits.shape[2] == self.dimension
 
         A_time = np.vstack((np.eye(order + 1), -np.eye(order + 1),
                             np.eye(order, order + 1) - np.eye(order, order + 1, 1)))
@@ -75,117 +60,41 @@ class BezierSPP(BaseSPP):
             self.dimension, order + 1, "xv")
         u_duration = MakeVectorContinuousVariable(order + 1, "Tu")
         v_duration = MakeVectorContinuousVariable(order + 1, "Tv")
-        u_control_vars = []
-        v_control_vars = []
-        u_duration_vars = []
-        v_duration_vars = []
-        for ii in range(order + 1):
-            u_control_vars.append(u_control[:, ii])
-            v_control_vars.append(v_control[:, ii])
-            u_duration_vars.append(np.array([u_duration[ii]]))
-            v_duration_vars.append(np.array([v_duration[ii]]))
-        u_vars = np.concatenate((u_control.flatten("F"), u_duration))
-        edge_vars = np.concatenate((u_control.flatten("F"), u_duration, v_control.flatten("F"), v_duration))
-        u_r_trajectory = BsplineTrajectory_[Expression](
+
+        self.u_vars = np.concatenate((u_control.flatten("F"), u_duration))
+        self.u_r_trajectory = BsplineTrajectory_[Expression](
             BsplineBasis_[Expression](order + 1, order + 1, KnotVectorType.kClampedUniform, 0., 1.),
-            u_control_vars)
+            list(u_control.T))
+        self.u_h_trajectory = BsplineTrajectory_[Expression](
+            BsplineBasis_[Expression](order + 1, order + 1, KnotVectorType.kClampedUniform, 0., 1.),
+            list(np.expand_dims(u_duration, 1)))
+
+        edge_vars = np.concatenate((u_control.flatten("F"), u_duration, v_control.flatten("F"), v_duration))
         v_r_trajectory = BsplineTrajectory_[Expression](
             BsplineBasis_[Expression](order + 1, order + 1, KnotVectorType.kClampedUniform, 0., 1.),
-            v_control_vars)
-        u_h_trajectory = BsplineTrajectory_[Expression](
-            BsplineBasis_[Expression](order + 1, order + 1, KnotVectorType.kClampedUniform, 0., 1.),
-            u_duration_vars)
+            list(v_control.T))
         v_h_trajectory = BsplineTrajectory_[Expression](
             BsplineBasis_[Expression](order + 1, order + 1, KnotVectorType.kClampedUniform, 0., 1.),
-            v_duration_vars)
+            list(np.expand_dims(v_duration, 1)))
 
         # Continuity constraints
         self.contin_constraints = []
         for deriv in range(continuity + 1):
-            u_path_deriv = u_r_trajectory.MakeDerivative(deriv)
+            u_path_deriv = self.u_r_trajectory.MakeDerivative(deriv)
             v_path_deriv = v_r_trajectory.MakeDerivative(deriv)
             path_continuity_error = v_path_deriv.control_points()[0] - u_path_deriv.control_points()[-1]
             self.contin_constraints.append(LinearEqualityConstraint(
                 DecomposeLinearExpressions(path_continuity_error, edge_vars),
                 np.zeros(self.dimension)))
 
-            u_time_deriv = u_h_trajectory.MakeDerivative(deriv)
+            u_time_deriv = self.u_h_trajectory.MakeDerivative(deriv)
             v_time_deriv = v_h_trajectory.MakeDerivative(deriv)
             time_continuity_error = v_time_deriv.control_points()[0] - u_time_deriv.control_points()[-1]
             self.contin_constraints.append(LinearEqualityConstraint(
                 DecomposeLinearExpressions(time_continuity_error, edge_vars), 0.0))
 
-        # Formulate derivative constraints
         self.deriv_constraints = []
-        if deriv_limits is not None:
-            u_path_control = u_r_trajectory.MakeDerivative(1).control_points()
-            u_time_control = u_h_trajectory.MakeDerivative(1).control_points()
-            lb = np.expand_dims(deriv_limits[0, 0], 1)
-            ub = np.expand_dims(deriv_limits[0, 1], 1)
-
-            for ii in range(len(u_path_control)):
-                A_ctrl = DecomposeLinearExpressions(u_path_control[ii], u_vars)
-                b_ctrl = DecomposeLinearExpressions(u_time_control[ii], u_vars)
-                A_constraint = np.vstack((A_ctrl - ub * b_ctrl, -A_ctrl + lb * b_ctrl))
-                self.deriv_constraints.append(LinearConstraint(
-                    A_constraint, -np.inf*np.ones(2*self.dimension), np.zeros(2*self.dimension)))
-
-        # Formulate path length and regularizing cost
         self.edge_costs = []
-
-        if "time" in weights:
-            u_time_control = u_h_trajectory.control_points()
-            segment_time = u_time_control[-1] - u_time_control[0]
-            self.edge_costs.append(LinearCost(
-                weights["time"] * DecomposeLinearExpressions(segment_time, u_vars)[0], 0.))
-
-        norm_weights = weights["norm"] if "norm" in weights else []
-        for deriv in range(len(norm_weights)):
-            if norm_weights[deriv] < 1e-12:
-                continue
-            u_path_control = u_r_trajectory.MakeDerivative(deriv + 1).control_points()
-            for ii in range(len(u_path_control)):
-                H = DecomposeLinearExpressions(u_path_control[ii] / (order - deriv), u_vars)
-                self.edge_costs.append(L2NormCost(norm_weights[deriv] * H, np.zeros(self.dimension)))
-
-        integral_weights = weights["integral_norm"] if "integral_norm" in weights else []
-        integration_points = 100
-        s_points = np.linspace(0., 1., integration_points + 1)
-        for deriv in range(len(integral_weights)):
-            if integral_weights[deriv] < 1e-12:
-                continue
-            u_path_deriv = u_r_trajectory.MakeDerivative(deriv + 1)
-            q_ds = u_path_deriv.vector_values(s_points)
-
-            if u_path_deriv.basis().order() == 1:
-                for ii in [0, integration_points]:
-                    costs = []
-                    for jj in range(self.dimension):
-                        costs.append(q_ds[jj, ii])
-                    H = DecomposeLinearExpressions(costs, u_vars)
-                    self.edge_costs.append(L2NormCost(integral_weights[deriv] * H, np.zeros(self.dimension)))
-            else:
-                for ii in range(integration_points + 1):
-                    costs = []
-                    for jj in range(self.dimension):
-                        if ii == 0 or ii == integration_points:
-                            costs.append(0.5 * 1./integration_points * q_ds[jj, ii])
-                        else:
-                            costs.append(1./integration_points * q_ds[jj, ii])
-                    H = DecomposeLinearExpressions(costs, u_vars)
-                    self.edge_costs.append(L2NormCost(integral_weights[deriv] * H, np.zeros(self.dimension)))
-
-        norm_2_weights = weights["norm_squared"] if "norm_squared" in weights else []
-        for deriv in range(len(norm_2_weights)):
-            if norm_2_weights[deriv] < 1e-12:
-                continue
-            u_path_control = u_r_trajectory.MakeDerivative(deriv + 1).control_points()
-            u_time_control = u_h_trajectory.MakeDerivative(deriv + 1).control_points()
-            for ii in range(len(u_path_control)):
-                A_ctrl = DecomposeLinearExpressions(u_path_control[ii], u_vars)
-                b_ctrl = DecomposeLinearExpressions(u_time_control[ii], u_vars)
-                H = np.vstack(((order) * b_ctrl, np.sqrt(norm_2_weights[deriv]) * A_ctrl))
-                self.edge_costs.append(PerspectiveQuadraticCost(H))
 
         # Add edges to graph and apply costs/constraints
         if edges is None:
@@ -197,15 +106,103 @@ class BezierSPP(BaseSPP):
             v = vertices[jj]
             edge = self.spp.AddEdge(u, v, f"({ii}, {jj})")
 
-            for cost in self.edge_costs:
-                edge.AddCost(Binding[Cost](cost, u.x()))
-
             for c_con in self.contin_constraints:
                 edge.AddConstraint(Binding[Constraint](
                         c_con, np.append(u.x(), v.x())))
 
-            for d_con in self.deriv_constraints:
-                edge.AddConstraint(Binding[Constraint](d_con, u.x()))
+    def addTimeCost(self, weight):
+        assert isinstance(weight, float) or isinstance(weight, int)
+
+        u_time_control = self.u_h_trajectory.control_points()
+        segment_time = u_time_control[-1] - u_time_control[0]
+        time_cost = LinearCost(
+            weight * DecomposeLinearExpressions(segment_time, self.u_vars)[0], 0.)
+        self.edge_costs.append(time_cost)
+
+        for edge in self.spp.Edges():
+            edge.AddCost(Binding[Cost](time_cost, edge.xu()))
+
+    def addPathLengthCost(self, weight):
+        assert isinstance(weight, float) or isinstance(weight, int)
+
+        u_path_control = self.u_r_trajectory.MakeDerivative(1).control_points()
+        for ii in range(len(u_path_control)):
+            H = DecomposeLinearExpressions(u_path_control[ii] / self.order, self.u_vars)
+            path_cost = L2NormCost(weight * H, np.zeros(self.dimension))
+            self.edge_costs.append(path_cost)
+
+            for edge in self.spp.Edges():
+                edge.AddCost(Binding[Cost](path_cost, edge.xu()))
+
+    def addPathLengthIntegralCost(self, weight, integration_points=100):
+        assert isinstance(weight, float) or isinstance(weight, int)
+
+        s_points = np.linspace(0., 1., integration_points + 1)
+        u_path_deriv = self.u_r_trajectory.MakeDerivative(1)
+
+        if u_path_deriv.basis().order() == 1:
+            for t in [0.0, 1.0]:
+                q_ds = u_path_deriv.value(t)
+                costs = []
+                for ii in range(self.dimension):
+                    costs.append(q_ds[ii])
+                H = DecomposeLinearExpressions(costs, self.u_vars)
+                integral_cost = L2NormCost(weight * H, np.zeros(self.dimension))
+                self.edge_costs.append(integral_cost)
+
+                for edge in self.spp.Edges():
+                    edge.AddCost(Binding[Cost](integral_cost, edge.xu()))
+        else:
+            q_ds = u_path_deriv.vector_values(s_points)
+            for ii in range(integration_points + 1):
+                costs = []
+                for jj in range(self.dimension):
+                    if ii == 0 or ii == integration_points:
+                        costs.append(0.5 * 1./integration_points * q_ds[jj, ii])
+                    else:
+                        costs.append(1./integration_points * q_ds[jj, ii])
+                H = DecomposeLinearExpressions(costs, self.u_vars)
+                integral_cost = L2NormCost(weight * H, np.zeros(self.dimension))
+                self.edge_costs.append(integral_cost)
+
+                for edge in self.spp.Edges():
+                    edge.AddCost(Binding[Cost](integral_cost, edge.xu()))
+
+    def addPathEnergyCost(self, weight):
+        assert isinstance(weight, float) or isinstance(weight, int)
+
+        u_path_control = self.u_r_trajectory.MakeDerivative(1).control_points()
+        u_time_control = self.u_h_trajectory.MakeDerivative(1).control_points()
+        for ii in range(len(u_path_control)):
+            A_ctrl = DecomposeLinearExpressions(u_path_control[ii], self.u_vars)
+            b_ctrl = DecomposeLinearExpressions(u_time_control[ii], self.u_vars)
+            H = np.vstack(((self.order) * b_ctrl, np.sqrt(weight) * A_ctrl))
+            energy_cost = PerspectiveQuadraticCost(H, np.zeros(H.shape[0]))
+            self.edge_costs.append(energy_cost)
+
+            for edge in self.spp.Edges():
+                edge.AddCost(Binding[Cost](energy_cost, edge.xu()))
+
+    def addVelocityLimits(self, lower_bound, upper_bound):
+        assert len(lower_bound) == self.dimension
+        assert len(upper_bound) == self.dimension
+
+        u_path_control = self.u_r_trajectory.MakeDerivative(1).control_points()
+        u_time_control = self.u_h_trajectory.MakeDerivative(1).control_points()
+        lb = np.expand_dims(lower_bound, 1)
+        ub = np.expand_dims(upper_bound, 1)
+
+        for ii in range(len(u_path_control)):
+            A_ctrl = DecomposeLinearExpressions(u_path_control[ii], self.u_vars)
+            b_ctrl = DecomposeLinearExpressions(u_time_control[ii], self.u_vars)
+            A_constraint = np.vstack((A_ctrl - ub * b_ctrl, -A_ctrl + lb * b_ctrl))
+            velocity_con = LinearConstraint(
+                A_constraint, -np.inf*np.ones(2*self.dimension), np.zeros(2*self.dimension))
+            self.deriv_constraints.append(velocity_con)
+
+            for edge in self.spp.Edges():
+                edge.AddConstraint(Binding[Constraint](velocity_con, edge.xu()))
+
 
     def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, velocity=None):
         assert len(source) == self.dimension
@@ -234,14 +231,12 @@ class BezierSPP(BaseSPP):
                 # edge.AddConstraint(
                 #     u.x()[self.dimension + jj] - u.x()[jj]
                 #         == velocity[0, jj] * (u.x()[-self.order] - u.x()[-(self.order + 1)]))
+
             edge.AddConstraint(u.x()[-(self.order + 1)] == 0.)
 
         for ii in edges[1]:
             u = vertices[ii]
             edge = self.spp.AddEdge(u, goal, f"({ii}, goal)")
-
-            for cost in self.edge_costs:
-                edge.AddCost(Binding[Cost](cost, u.x()))
 
             for jj in range(self.dimension):
                 edge.AddConstraint(
@@ -249,6 +244,9 @@ class BezierSPP(BaseSPP):
                 # edge.AddConstraint(
                 #     u.x()[-(self.dimension + self.order + 1) + jj] - u.x()[-(2*self.dimension + self.order + 1) + jj]
                 #     == velocity[1, jj] * (u.x()[-1] - u.x()[-2]))
+
+            for cost in self.edge_costs:
+                edge.AddCost(Binding[Cost](cost, u.x()))
 
             for d_con in self.deriv_constraints:
                 edge.AddConstraint(Binding[Constraint](d_con, u.x()))
