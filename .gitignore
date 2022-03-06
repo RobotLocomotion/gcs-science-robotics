@@ -11,3 +11,5 @@ models/room_gen/building.sdf
 .ipynb_checkpoints
 *.pyc
 *.tar
+
+*.DS_Store
