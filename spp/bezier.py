@@ -20,6 +20,7 @@ from pydrake.solvers.mathematicalprogram import(
     LinearConstraint,
     LinearCost,
     LinearEqualityConstraint,
+    QuadraticCost,
     PerspectiveQuadraticCost,
 )
 from pydrake.symbolic import (
@@ -37,7 +38,7 @@ from pydrake.trajectories import (
 from spp.base import BaseSPP
 
 class BezierSPP(BaseSPP):
-    def __init__(self, regions, order, continuity, edges=None):
+    def __init__(self, regions, order, continuity, edges=None, hdot_min=1e-6):
         BaseSPP.__init__(self, regions)
 
         self.order = order
@@ -46,7 +47,7 @@ class BezierSPP(BaseSPP):
 
         A_time = np.vstack((np.eye(order + 1), -np.eye(order + 1),
                             np.eye(order, order + 1) - np.eye(order, order + 1, 1)))
-        b_time = np.concatenate((1000*np.ones(order + 1), np.zeros(order + 1), -1e-6 * np.ones(order)))
+        b_time = np.concatenate((1e3*np.ones(order + 1), np.zeros(order + 1), -hdot_min * np.ones(order)))
         self.time_scaling_set = HPolyhedron(A_time, b_time)
 
         for r in self.regions:
@@ -182,6 +183,24 @@ class BezierSPP(BaseSPP):
 
             for edge in self.spp.Edges():
                 edge.AddCost(Binding[Cost](energy_cost, edge.xu()))
+
+    def addAccelerationRegularization(self, weight_rddot, weight_hddot):
+        for weight in [weight_rddot, weight_hddot]:
+            assert isinstance(weight, float) or isinstance(weight, int)
+
+        trajectories = [self.u_r_trajectory, self.u_h_trajectory]
+        weights = [weight_rddot, weight_hddot]
+
+        for traj, weight in zip(trajectories, weights):
+            ddot_control = traj.MakeDerivative(2).control_points()
+            for c in ddot_control:
+                A_ctrl = DecomposeLinearExpressions(c, self.u_vars)
+                H = A_ctrl.T.dot(A_ctrl) * np.sqrt(weight / (self.order - 1))
+                reg_cost = QuadraticCost(H, np.zeros(H.shape[0]), 0.)
+                self.edge_costs.append(reg_cost)
+
+                for edge in self.spp.Edges():
+                    edge.AddCost(Binding[Cost](reg_cost, edge.xu()))
 
     def addVelocityLimits(self, lower_bound, upper_bound):
         assert len(lower_bound) == self.dimension
