@@ -23,8 +23,8 @@ class LinearSPP(BaseSPP):
             np.hstack((-np.eye(self.dimension), np.eye(self.dimension))),
             np.zeros(self.dimension))
 
-        for r in self.regions:
-            self.spp.AddVertex(r)
+        for i, r in enumerate(self.regions):
+            self.spp.AddVertex(r, name = self.names[i] if not self.names is None else '')
 
         if edges is None:
             edges = self.findEdgesViaOverlaps()

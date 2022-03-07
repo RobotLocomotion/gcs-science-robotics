@@ -15,6 +15,10 @@ from spp.rounding import (
 
 class BaseSPP:
     def __init__(self, regions):
+        self.names = None
+        if type(regions) is dict:
+            self.names = list(regions.keys())
+            regions = list(regions.values())
         self.dimension = regions[0].ambient_dimension()
         self.regions = regions.copy()
         self.solver = None
