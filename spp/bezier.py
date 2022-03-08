@@ -195,8 +195,8 @@ class BezierSPP(BaseSPP):
             ddot_control = traj.MakeDerivative(2).control_points()
             for c in ddot_control:
                 A_ctrl = DecomposeLinearExpressions(c, self.u_vars)
-                H = A_ctrl.T.dot(A_ctrl) * np.sqrt(weight / (self.order - 1))
-                reg_cost = QuadraticCost(H, np.zeros(H.shape[0]), 0.)
+                H = A_ctrl.T.dot(A_ctrl) * 2 * weight / (self.order - 1)
+                reg_cost = QuadraticCost(H, np.zeros(H.shape[0]), 0)
                 self.edge_costs.append(reg_cost)
 
                 for edge in self.spp.Edges():
