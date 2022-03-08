@@ -226,20 +226,20 @@ class BezierSPP(BaseSPP):
     def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, velocity=None):
         assert len(source) == self.dimension
         assert len(target) == self.dimension
-        if velocity is None:
-            velocity = np.zeros((2, self.dimension))
-        assert velocity.shape == (2, self.dimension)
 
-        u_path_control = self.u_r_trajectory.MakeDerivative(1).control_points()
-        u_time_control = self.u_h_trajectory.MakeDerivative(1).control_points()
-        initial_velocity_error = np.squeeze(u_path_control[0]) - velocity[0] * np.squeeze(u_time_control[0])
-        final_velocity_error = np.squeeze(u_path_control[-1]) - velocity[1] * np.squeeze(u_time_control[-1])
-        initial_velocity_con = LinearEqualityConstraint(
-            DecomposeLinearExpressions(initial_velocity_error, self.u_vars),
-            np.zeros(self.dimension))
-        final_velocity_con = LinearEqualityConstraint(
-            DecomposeLinearExpressions(final_velocity_error, self.u_vars),
-            np.zeros(self.dimension))
+        if velocity is not None:
+            assert velocity.shape == (2, self.dimension)
+
+            u_path_control = self.u_r_trajectory.MakeDerivative(1).control_points()
+            u_time_control = self.u_h_trajectory.MakeDerivative(1).control_points()
+            initial_velocity_error = np.squeeze(u_path_control[0]) - velocity[0] * np.squeeze(u_time_control[0])
+            final_velocity_error = np.squeeze(u_path_control[-1]) - velocity[1] * np.squeeze(u_time_control[-1])
+            initial_velocity_con = LinearEqualityConstraint(
+                DecomposeLinearExpressions(initial_velocity_error, self.u_vars),
+                np.zeros(self.dimension))
+            final_velocity_con = LinearEqualityConstraint(
+                DecomposeLinearExpressions(final_velocity_error, self.u_vars),
+                np.zeros(self.dimension))
 
         vertices = self.spp.Vertices()
         # Add edges connecting source and target to graph
@@ -258,7 +258,8 @@ class BezierSPP(BaseSPP):
 
             for jj in range(self.dimension):
                 edge.AddConstraint(start.x()[jj] == u.x()[jj])
-            edge.AddConstraint(Binding[Constraint](initial_velocity_con, u.x()))
+            if velocity is not None:
+                edge.AddConstraint(Binding[Constraint](initial_velocity_con, u.x()))
 
             edge.AddConstraint(u.x()[-(self.order + 1)] == 0.)
 
@@ -269,7 +270,8 @@ class BezierSPP(BaseSPP):
             for jj in range(self.dimension):
                 edge.AddConstraint(
                     u.x()[-(self.dimension + self.order + 1) + jj] == goal.x()[jj])
-            edge.AddConstraint(Binding[Constraint](final_velocity_con, u.x()))
+            if velocity is not None:
+                edge.AddConstraint(Binding[Constraint](final_velocity_con, u.x()))
 
             for cost in self.edge_costs:
                 edge.AddCost(Binding[Cost](cost, u.x()))
