@@ -19,6 +19,8 @@ class BaseSPP:
         if type(regions) is dict:
             self.names = list(regions.keys())
             regions = list(regions.values())
+        else:
+            self.names = ["v" + str(ii) for ii in range(len(regions))]
         self.dimension = regions[0].ambient_dimension()
         self.regions = regions.copy()
         self.solver = None
@@ -72,9 +74,15 @@ class BaseSPP:
         for edge in self.spp.Edges():
             edge.ClearPhiConstraints()
 
-    def VisualizeGraph(self):
+    def VisualizeGraph(self, file_type="svg"):
         graphviz = self.spp.GetGraphvizString(None, False)
-        return pydot.graph_from_dot_data(graphviz)[0].create_svg()
+        data = pydot.graph_from_dot_data(graphviz)[0]
+        if file_type == "svg":
+            return data.create_svg()
+        elif file_type == "png":
+            return data.create_png()
+        else:
+            raise ValueError("Unrecognized file type:", file_type)
 
 
     def solveSPP(self, start, goal, rounding):

@@ -22,6 +22,7 @@
         </inertia>
       </inertial>
       <visual name="visual">
+        <pose>0 0 0 0 0 1.570796</pose>
         <geometry>
         <mesh>
         <uri>bin.obj</uri>
