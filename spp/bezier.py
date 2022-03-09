@@ -105,7 +105,7 @@ class BezierSPP(BaseSPP):
         for ii, jj in edges:
             u = vertices[ii]
             v = vertices[jj]
-            edge = self.spp.AddEdge(u, v, f"({ii}, {jj})")
+            edge = self.spp.AddEdge(u, v, f"({u.name()}, {v.name()})")
 
             for c_con in self.contin_constraints:
                 edge.AddConstraint(Binding[Constraint](
@@ -254,7 +254,7 @@ class BezierSPP(BaseSPP):
 
         for ii in edges[0]:
             u = vertices[ii]
-            edge = self.spp.AddEdge(start, u, f"(start, {ii})")
+            edge = self.spp.AddEdge(start, u, f"(start, {u.name()})")
 
             for jj in range(self.dimension):
                 edge.AddConstraint(start.x()[jj] == u.x()[jj])
@@ -265,7 +265,7 @@ class BezierSPP(BaseSPP):
 
         for ii in edges[1]:
             u = vertices[ii]
-            edge = self.spp.AddEdge(u, goal, f"({ii}, goal)")
+            edge = self.spp.AddEdge(u, goal, f"({u.name()}, goal)")
 
             for jj in range(self.dimension):
                 edge.AddConstraint(

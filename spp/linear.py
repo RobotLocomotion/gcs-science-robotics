@@ -33,7 +33,7 @@ class LinearSPP(BaseSPP):
         for ii, jj in edges:
             u = vertices[ii]
             v = vertices[jj]
-            edge = self.spp.AddEdge(u, v, f"({ii}, {jj})")
+            edge = self.spp.AddEdge(u, v, f"({u.name()}, {v.name()})")
 
             edge.AddCost(Binding[Cost](self.edge_cost, np.append(u.x(), v.x())))
 
@@ -61,14 +61,14 @@ class LinearSPP(BaseSPP):
 
         for ii in edges[0]:
             u = vertices[ii]
-            edge = self.spp.AddEdge(start, u, f"(start, {ii})")
+            edge = self.spp.AddEdge(start, u, f"(start, {u.name()})")
 
             for jj in range(self.dimension):
                 edge.AddConstraint(start.x()[jj] == u.x()[jj])
 
         for ii in edges[1]:
             u = vertices[ii]
-            edge = self.spp.AddEdge(u, goal, f"({ii}, goal)")
+            edge = self.spp.AddEdge(u, goal, f"({u.name()}, goal)")
 
             edge.AddCost(Binding[Cost](
                 self.edge_cost, np.append(u.x(), goal.x())))
