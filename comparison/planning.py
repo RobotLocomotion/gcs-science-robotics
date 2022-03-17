@@ -1,3 +1,4 @@
+from sympy import diag
 from pydrake.planning.common_robotics_utilities import (
     Graph, GraphNode,
     GrowRoadMap,
@@ -15,43 +16,56 @@ from pydrake.common import RandomGenerator
 import numpy as np
 import pickle
 import time
+import multiprocessing as mp
 
 class ClassicalPlanning:
-    def __init__(self, plant, plant_context, step_size, collision_step_size):
+    def __init__(self, plant, diagram, collision_step_size, seed):
         self.plant = plant
-        self.plant_context = plant_context
-        self.step_size = step_size
+        self.diagram = diagram
         self.collision_step_size = collision_step_size
 
         self.PositionUpperLimits = self.plant.GetPositionUpperLimits()
         self.PositionLowerLimits = self.plant.GetPositionLowerLimits()
 
+        self.RNG = RandomGenerator(seed)
+        np.random.seed(seed)
+
+    def make_context(self):
+        context = self.diagram.CreateDefaultContext()
+        return self.plant.GetMyContextFromRoot(context)
+
     def distance_fn(self, q_1, q_2):
         return np.linalg.norm(q_2 - q_1)
 
     def check_state_validity_fn(self, q):
-        self.plant.SetPositions(self.plant_context, q)
-        query_object = self.plant.get_geometry_query_input_port().Eval(self.plant_context)
-    
-        return not query_object.HasCollisions()       
+        plant_context = self.make_context()
+        self.plant.SetPositions(plant_context, q)
+        query_object = self.plant.get_geometry_query_input_port().Eval(plant_context)
+        return not query_object.HasCollisions()      
 
     def InterpolateWaypoint(self, start, end, ratio):
         return start + ratio*(end-start)
 
     def check_edge_validity_fn(self, start, end):
+        plant_context = self.make_context() #to make it threadsafe
         num_steps = np.ceil(self.distance_fn(start, end)/self.collision_step_size)
 
-        for step in range(int(num_steps)+1):
+        steps = np.arange(int(num_steps)+1)
+        #TODO sort steps in an alternating way s.t. we approach the middle from both sides
+        for step in steps:
             interpolation_ratio = step / num_steps
             interpolated_point = self.InterpolateWaypoint(start, end, interpolation_ratio)
+
+            self.plant.SetPositions(plant_context, interpolated_point)
+            query_object = self.plant.get_geometry_query_input_port().Eval(plant_context)
             
-            if not self.check_state_validity_fn(interpolated_point):
+            if query_object.HasCollisions():
                 return False
 
         return True
-    
+        
     def shortcut(self, path, max_iter, max_failed_iter, max_backtracking_steps,max_shortcut_fraction,
-                 resample_shortcuts_interval, check_for_marginal_shortcuts, seed = 0):
+                 resample_shortcuts_interval, check_for_marginal_shortcuts):
 
         shortcutted_path = ShortcutSmoothPath(path,
                                               max_iter,
@@ -63,22 +77,16 @@ class ClassicalPlanning:
                                               self.check_edge_validity_fn, 
                                               self.distance_fn,
                                               self.InterpolateWaypoint,
-                                              RandomGenerator(seed))
+                                              self.RNG)
         return shortcutted_path
  
 
-
-
 class PRM(ClassicalPlanning):
-    def __init__(self, plant, plant_context, step_size, collision_step_size, K, solve_timeout):
-        ClassicalPlanning.__init__(self, plant, plant_context, step_size, collision_step_size)
+    def __init__(self, plant, diagram, collision_step_size, seed, K, q_init = []):
+        ClassicalPlanning.__init__(self, plant, diagram, collision_step_size, seed)
         self.K = K
-        self.solve_timeout = solve_timeout
-        self.roadmap = Graph()
+        self.roadmap = Graph([GraphNode(q) for q in q_init])
         self.roadmap_size = 0
-
-    def check_goal_fn(self, q):
-        return np.linalg.norm(q_end - q) < 1e-6
 
     def prm_sampling_fn(self):
         return np.random.rand(len(self.PositionLowerLimits))*(self.PositionUpperLimits-self.PositionLowerLimits) + self.PositionLowerLimits
@@ -86,7 +94,7 @@ class PRM(ClassicalPlanning):
     def roadmap_termination_fn(self, current_roadmap_size):
         return current_roadmap_size >= self.roadmap_size
     
-    def GrowRoadMap(self, target_size):
+    def GrowRoadMap(self, target_size, use_parralel = False):
         if target_size <= 0:
             raise Exception(f"Target size must be greater then 0")
         if  target_size <= self.roadmap_size:
@@ -95,7 +103,7 @@ class PRM(ClassicalPlanning):
         self.roadmap_size = target_size
         data_stats = GrowRoadMap(self.roadmap, self.prm_sampling_fn, self.distance_fn,
                                 self.check_state_validity_fn, self.check_edge_validity_fn,
-                                self.roadmap_termination_fn, self.K, False, True, False)
+                                self.roadmap_termination_fn, self.K, use_parralel, True, False)
         return data_stats
     
     def resetRoadmap(self):
@@ -145,8 +153,9 @@ class PRM(ClassicalPlanning):
 
 
 class BiRRT(ClassicalPlanning):
-    def __init__(self, plant, plant_context, step_size, collision_step_size, goal_bias, solve_timeout):
-        ClassicalPlanning.__init__(self, plant, plant_context, step_size, collision_step_size)
+    def __init__(self, plant, diagram, collision_step_size, seed, step_size, goal_bias, solve_timeout):
+        ClassicalPlanning.__init__(self, plant, diagram, collision_step_size, seed)
+        self.step_size = step_size
         self.goal_bias = goal_bias
         self.solve_timeout = solve_timeout
     
@@ -183,7 +192,7 @@ class BiRRT(ClassicalPlanning):
         return np.linalg.norm(source - target) < 1e-6
     
 
-    def RRT_Connect(self, q_ini, q_final, seed = 0):
+    def RRT_Connect(self, q_ini, q_final):
         start_tree = [SimpleRRTPlannerState(q_ini)]
         end_tree = [SimpleRRTPlannerState(q_final)]
         
@@ -207,7 +216,7 @@ class BiRRT(ClassicalPlanning):
                 states_connected_fn=self.states_connected_fn,
                 goal_bridge_callback_fn=None,
                 tree_sampling_bias=0.5, p_switch_tree=0.25,
-                termination_check_fn=termination_fn, rng=RandomGenerator(seed))
+                termination_check_fn=termination_fn, rng=self.RNG)
         return connect_result 
 
     def getPath(self, sequence, verbose = False, path_processing = lambda path: path):
@@ -216,17 +225,17 @@ class BiRRT(ClassicalPlanning):
         for start_pt, goal_pt in zip(sequence[:-1], sequence[1:]):
 
             start_time = time.time()
-            path = self.RRT_Connect(start_pt, goal_pt).Path()
+            biRRT_path = self.RRT_Connect(start_pt, goal_pt).Path()
 
-            path = path_processing(path)
+            biRRT_path = path_processing(biRRT_path)
             run_time += time.time() - start_time
 
-            if len(path) == 0:
+            if len(biRRT_path) == 0:
                 if verbose:
                     print(f"Failed between {start_pt} and {goal_pt}")
                 return None
             
-            path += path[1:]
+            path += biRRT_path[1:]
             
         return np.stack(path).T, run_time
 
