@@ -1,0 +1,76 @@
+<sdf version="1.5">
+  <model name="Robot">
+    <link name="Robot">
+      <visual name="visual_Wall.016">
+        <pose>0.0 0.0 2.625 0.0 0.0 0.0</pose>
+        <geometry>
+          <box>
+            <size>0.25 5.0 0.7505852580070496</size>
+          </box>
+        </geometry>
+      </visual>
+      <collision name="collision_Wall.016">
+        <pose>0.0 0.0 2.625 0.0 0.0 0.0</pose>
+        <geometry>
+          <box>
+            <size>0.25 5.0 0.7505852580070496</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual_Wall.013">
+        <pose>0.0 0.0 0.35619157552719116 0.0 0.0 0.0</pose>
+        <geometry>
+          <box>
+            <size>0.25 5.0 0.7154595851898193</size>
+          </box>
+        </geometry>
+      </visual>
+      <collision name="collision_Wall.013">
+        <pose>0.0 0.0 0.35619157552719116 0.0 0.0 0.0</pose>
+        <geometry>
+          <box>
+            <size>0.25 5.0 0.7154595851898193</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual_Wall.012">
+        <pose>0.0 -2.261723518371582 1.5 0.0 0.0 0.0</pose>
+        <geometry>
+          <box>
+            <size>0.25 0.49168092012405396 3.0</size>
+          </box>
+        </geometry>
+      </visual>
+      <collision name="collision_Wall.012">
+        <pose>0.0 -2.261723518371582 1.5 0.0 0.0 0.0</pose>
+        <geometry>
+          <box>
+            <size>0.25 0.49168092012405396 3.0</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual_Wall.004">
+        <pose>0.0 1.0 1.5 0.0 0.0 0.0</pose>
+        <geometry>
+          <box>
+            <size>0.25 3.0 3.0</size>
+          </box>
+        </geometry>
+      </visual>
+      <collision name="collision_Wall.004">
+        <pose>0.0 1.0 1.5 0.0 0.0 0.0</pose>
+        <geometry>
+          <box>
+            <size>0.25 3.0 3.0</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+    <frame name="frame_InWindow1">
+      <pose>0.0 1.25 1.5 0.0 0.0 0.0</pose>
+    </frame>
+    <frame name="frame_InWindow2">
+      <pose>0.0 -1.25 1.5 0.0 0.0 0.0</pose>
+    </frame>
+  </model>
+</sdf>

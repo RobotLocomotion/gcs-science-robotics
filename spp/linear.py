@@ -84,27 +84,42 @@ class LinearSPP(BaseSPP):
                   "Cost:", result.get_optimal_cost(),
                   "Solver time:", result.get_solver_details().optimizer_time)
             if rounding and hard_result is not None:
-                print("Rounded Solution\t",
-                      "Success:", hard_result.get_solution_result(),
-                      "Cost:", hard_result.get_optimal_cost(),
-                      "Solver time:",
-                      hard_result.get_solver_details().optimizer_time)
+                print("Rounded Solutions:")
+                for r in hard_result:
+                    if r is None:
+                        print("\t\tNo path to solve")
+                        continue
+                    print("\t\t",
+                        "Success:", r.get_solution_result(),
+                        "Cost:", r.get_optimal_cost(),
+                        "Solver time:", r.get_solver_details().optimizer_time)
 
         if active_edges is None:
             self.ResetGraph([start, goal])
-            return None, result, hard_result
+            return None, result, None, hard_result
+
+        best_cost = np.inf
+        best_path = None
+        best_result = None
+        for path, r in zip(active_edges, hard_result):
+            if path is None or not r.is_success():
+                continue
+            if r.get_optimal_cost() < best_cost:
+                best_cost = r.get_optimal_cost()
+                best_path = path
+                best_result = r
 
         if verbose:
-            for edge in active_edges:
+            for edge in best_path:
                 print("Added", edge.name(), "to path. Value:",
                       result.GetSolution(edge.phi()))
 
         # Extract trajectory
         waypoints = np.empty((self.dimension, 0))
-        for edge in active_edges:
-            new_waypoint = hard_result.GetSolution(edge.xv())
+        for edge in best_path:
+            new_waypoint = best_result.GetSolution(edge.xv())
             waypoints = np.concatenate(
                 [waypoints, np.expand_dims(new_waypoint, 1)], axis=1)
 
         self.ResetGraph([start, goal])
-        return waypoints, result, hard_result
+        return waypoints, result, best_result, hard_result

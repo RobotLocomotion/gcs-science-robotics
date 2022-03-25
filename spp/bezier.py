@@ -223,7 +223,8 @@ class BezierSPP(BaseSPP):
                 edge.AddConstraint(Binding[Constraint](velocity_con, edge.xu()))
 
 
-    def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, velocity=None):
+    def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, velocity=None,
+                  zero_deriv_boundary=None):
         assert len(source) == self.dimension
         assert len(target) == self.dimension
 
@@ -240,6 +241,20 @@ class BezierSPP(BaseSPP):
             final_velocity_con = LinearEqualityConstraint(
                 DecomposeLinearExpressions(final_velocity_error, self.u_vars),
                 np.zeros(self.dimension))
+
+        if zero_deriv_boundary is not None:
+            assert self.order > zero_deriv_boundary + 1
+            initial_constraints = []
+            final_constraints = []
+
+            for deriv in range(1, zero_deriv_boundary+1):
+                u_path_control = self.u_r_trajectory.MakeDerivative(deriv).control_points()
+                initial_constraints.append(LinearEqualityConstraint(
+                    DecomposeLinearExpressions(np.squeeze(u_path_control[0]), self.u_vars),
+                    np.zeros(self.dimension)))
+                final_constraints.append(LinearEqualityConstraint(
+                    DecomposeLinearExpressions(np.squeeze(u_path_control[-1]), self.u_vars),
+                    np.zeros(self.dimension)))
 
         vertices = self.spp.Vertices()
         # Add edges connecting source and target to graph
@@ -260,6 +275,9 @@ class BezierSPP(BaseSPP):
                 edge.AddConstraint(start.x()[jj] == u.x()[jj])
             if velocity is not None:
                 edge.AddConstraint(Binding[Constraint](initial_velocity_con, u.x()))
+            if zero_deriv_boundary is not None:
+                for i_con in initial_constraints:
+                    edge.AddConstraint(Binding[Constraint](i_con, u.x()))
 
             edge.AddConstraint(u.x()[-(self.order + 1)] == 0.)
 
@@ -272,6 +290,9 @@ class BezierSPP(BaseSPP):
                     u.x()[-(self.dimension + self.order + 1) + jj] == goal.x()[jj])
             if velocity is not None:
                 edge.AddConstraint(Binding[Constraint](final_velocity_con, u.x()))
+            if zero_deriv_boundary is not None:
+                for f_con in final_constraints:
+                    edge.AddConstraint(Binding[Constraint](f_con, u.x()))
 
             for cost in self.edge_costs:
                 edge.AddCost(Binding[Cost](cost, u.x()))
@@ -291,18 +312,33 @@ class BezierSPP(BaseSPP):
                   "Cost:", result.get_optimal_cost(),
                   "Solver time:", result.get_solver_details().optimizer_time)
             if rounding and hard_result is not None:
-                print("Rounded Solution\t",
-                      "Success:", hard_result.get_solution_result(),
-                      "Cost:", hard_result.get_optimal_cost(),
-                      "Solver time:",
-                      hard_result.get_solver_details().optimizer_time)
+                print("Rounded Solutions:")
+                for r in hard_result:
+                    if r is None:
+                        print("\t\tNo path to solve")
+                        continue
+                    print("\t\t",
+                        "Success:", r.get_solution_result(),
+                        "Cost:", r.get_optimal_cost(),
+                        "Solver time:", r.get_solver_details().optimizer_time)
 
         if active_edges is None:
             self.ResetGraph([start, goal])
-            return None, result, hard_result
+            return None, result, None, hard_result
+
+        best_cost = np.inf
+        best_path = None
+        best_result = None
+        for path, r in zip(active_edges, hard_result):
+            if path is None or not r.is_success():
+                continue
+            if r.get_optimal_cost() < best_cost:
+                best_cost = r.get_optimal_cost()
+                best_path = path
+                best_result = r
 
         if verbose:
-            for edge in active_edges:
+            for edge in best_path:
                 print("Added", edge.name(), "to path. Value:",
                       result.GetSolution(edge.phi()))
 
@@ -310,17 +346,17 @@ class BezierSPP(BaseSPP):
         knots = np.zeros(self.order + 1)
         path_control_points = []
         time_control_points = []
-        for edge in active_edges:
+        for edge in best_path:
             if edge.v() == goal:
                 knots = np.concatenate((knots, [knots[-1]]))
-                path_control_points.append(hard_result.GetSolution(edge.xv()))
-                time_control_points.append(np.array([hard_result.GetSolution(edge.xu())[-1]]))
+                path_control_points.append(best_result.GetSolution(edge.xv()))
+                time_control_points.append(np.array([best_result.GetSolution(edge.xu())[-1]]))
                 break
             edge_time = knots[-1] + 1.
             knots = np.concatenate((knots, np.full(self.order, edge_time)))
-            edge_path_points = np.reshape(hard_result.GetSolution(edge.xv())[:-(self.order + 1)],
+            edge_path_points = np.reshape(best_result.GetSolution(edge.xv())[:-(self.order + 1)],
                                              (self.dimension, self.order + 1), "F")
-            edge_time_points = hard_result.GetSolution(edge.xv())[-(self.order + 1):]
+            edge_time_points = best_result.GetSolution(edge.xv())[-(self.order + 1):]
             for ii in range(self.order):
                 path_control_points.append(edge_path_points[:, ii])
                 time_control_points.append(np.array([edge_time_points[ii]]))
@@ -333,7 +369,7 @@ class BezierSPP(BaseSPP):
         time_traj = BsplineTrajectory(BsplineBasis(self.order + 1, knots), time_control_points)
 
         self.ResetGraph([start, goal])
-        return BezierTrajectory(path, time_traj), result, hard_result
+        return BezierTrajectory(path, time_traj), result, best_result, hard_result
 
 class BezierTrajectory:
     def __init__(self, path_traj, time_traj):

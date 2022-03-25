@@ -38,6 +38,44 @@ def greedyForwardPathSearch(spp, result, start, goal):
             vertices.append(max_edge.v())
     return active_edges
 
+def greedyBackwardPathSearch(spp, result, start, goal):
+    # Extract path with a tree walk
+    vertices = [goal]
+    active_edges = []
+    unused_edges = spp.Edges()
+    max_phi = 0
+    max_edge = None
+    for edge in unused_edges:
+        phi = result.GetSolution(edge.phi())
+        if edge.v() == goal and phi > max_phi:
+            max_phi = phi
+            max_edge = edge
+    if max_edge is None:
+        return None
+    active_edges.insert(0, max_edge)
+    unused_edges.remove(max_edge)
+    vertices.insert(0, max_edge.u())
+
+    while active_edges[0].u() != start:
+        max_phi = 0
+        max_edge = None
+        for edge in unused_edges:
+            phi = result.GetSolution(edge.phi())
+            if edge.v() == active_edges[0].u() and phi > max_phi:
+                max_phi = phi
+                max_edge = edge
+        if max_edge is None:
+            return None
+        active_edges.insert(0, max_edge)
+        unused_edges.remove(max_edge)
+        if max_edge.u() in vertices:
+            loop_index = vertices.index(max_edge.u())
+            active_edges = active_edges[loop_index+1:]
+            vertices = vertices[loop_index:]
+        else:
+            vertices.insert(0, max_edge.u())
+    return active_edges
+
 def dijkstraRounding(gcs, result, source, target, flow_min=1e-4):
     G = nx.DiGraph()
     G.add_nodes_from(gcs.Vertices())

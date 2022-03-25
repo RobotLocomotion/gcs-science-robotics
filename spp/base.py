@@ -7,6 +7,7 @@ from pydrake.solvers.mathematicalprogram import (
     CommonSolverOption,
     SolverOptions,
 )
+from pydrake.solvers.gurobi import GurobiSolver
 from pydrake.solvers.mosek import MosekSolver
 
 from spp.rounding import (
@@ -25,7 +26,7 @@ class BaseSPP:
         self.regions = regions.copy()
         self.solver = None
         self.options = None
-        self.rounding_fn = greedyForwardPathSearch
+        self.rounding_fn = [greedyForwardPathSearch]
         for r in self.regions:
             assert r.ambient_dimension() == self.dimension
 
@@ -62,11 +63,21 @@ class BaseSPP:
         self.options.SetOption(MosekSolver.id(), "MSK_DPAR_INTPNT_CO_TOL_REL_GAP", 1e-3)
         self.options.SetOption(MosekSolver.id(), "MSK_IPAR_INTPNT_SOLVE_FORM", 1)
         self.options.SetOption(MosekSolver.id(), "MSK_DPAR_MIO_TOL_REL_GAP", 1e-3)
-        # options.SetOption(GurobiSolver.id(), "MIPGap", 0.01)
-        # options.SetOption(GurobiSolver.id(), "TimeLimit", 30.)
+        self.options.SetOption(MosekSolver.id(), "MSK_DPAR_MIO_MAX_TIME", 3600.0)
+        self.options.SetOption(GurobiSolver.id(), "MIPGap", 1e-3)
+        self.options.SetOption(GurobiSolver.id(), "TimeLimit", 3600.0)
 
     def setRoundingStrategy(self, rounding_fn):
-        self.rounding_fn = rounding_fn
+        if callable(rounding_fn):
+            self.rounding_fn = [rounding_fn]
+        elif isinstance(rounding_fn, list):
+            assert len(rounding_fn) > 0
+            for fn in rounding_fn:
+                assert callable(fn)
+            self.rounding_fn = rounding_fn
+        else:
+            raise ValueError("Rounding strategy must either be "
+                             "a function or list of functions.")
 
     def ResetGraph(self, vertices):
         for v in vertices:
@@ -92,22 +103,40 @@ class BaseSPP:
             return None, result, None
 
         # Extract path
-        active_edges = self.rounding_fn(self.spp, result, start, goal)
-        if active_edges is None:
-            print("Could not find path")
+        active_edges = []
+        found_path = False
+        for fn in self.rounding_fn:
+            rounded_edges = fn(self.spp, result, start, goal)
+            if rounded_edges is None:
+                print(fn.__name__, "could not find a path.")
+            else:
+                found_path = True
+            active_edges.append(rounded_edges)
+        if not found_path:
+            print("All rounding strategies failed to find a path.")
             return None, result, None
 
         # Solve with hard edge choices
         if rounding:
-            for edge in self.spp.Edges():
-                if edge in active_edges:
-                    edge.AddPhiConstraint(True)
-                else:
-                    edge.AddPhiConstraint(False)
-            hard_result = self.spp.SolveShortestPath(start, goal, rounding, self.solver, self.options)
-            if not hard_result.is_success():
-                print("Second solve failed")
+            hard_result = []
+            found_solution = False
+            for path_edges in active_edges:
+                if path_edges is None:
+                    hard_result.append(None)
+                    continue
+                for edge in self.spp.Edges():
+                    if edge in path_edges:
+                        edge.AddPhiConstraint(True)
+                    else:
+                        edge.AddPhiConstraint(False)
+                hard_result.append(self.spp.SolveShortestPath(
+                    start, goal, rounding, self.solver, self.options))
+                if hard_result[-1].is_success():
+                    found_solution = True
+            if not found_solution:
+                print("Second solve failed on all paths.")
                 return None, result, hard_result
         else:
-            hard_result = result
+            hard_result = [result]
+            active_edges = [active_edges[0]]
         return active_edges, result, hard_result
