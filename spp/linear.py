@@ -14,6 +14,7 @@ from pydrake.solvers.mathematicalprogram import (
 )
 
 from spp.base import BaseSPP
+from spp.preprocessing import removeRedundancies
 
 class LinearSPP(BaseSPP):
     def __init__(self, regions, edges=None):
@@ -44,7 +45,7 @@ class LinearSPP(BaseSPP):
                                  u.set().b()),
                 v.x()))
 
-    def SolvePath(self, source, target, rounding=False, verbose=False, edges=None):
+    def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, preprocessing=False):
         assert len(source) == self.dimension
         assert len(target) == self.dimension
 
@@ -75,6 +76,9 @@ class LinearSPP(BaseSPP):
 
         if not source_connected or not target_connected:
             print("Source connected:", source_connected, "Target connected:", target_connected)
+
+        if preprocessing:
+            removeRedundancies(self.spp, start, goal)
 
         active_edges, result, hard_result = self.solveSPP(start, goal, rounding)
 

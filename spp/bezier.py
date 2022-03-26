@@ -36,6 +36,7 @@ from pydrake.trajectories import (
 )
 
 from spp.base import BaseSPP
+from spp.preprocessing import removeRedundancies
 
 class BezierSPP(BaseSPP):
     def __init__(self, regions, order, continuity, edges=None, hdot_min=1e-6):
@@ -224,7 +225,7 @@ class BezierSPP(BaseSPP):
 
 
     def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, velocity=None,
-                  zero_deriv_boundary=None):
+                  zero_deriv_boundary=None, preprocessing=False):
         assert len(source) == self.dimension
         assert len(target) == self.dimension
 
@@ -303,6 +304,9 @@ class BezierSPP(BaseSPP):
 
         if not source_connected or not target_connected:
             print("Source connected:", source_connected, "Target connected:", target_connected)
+
+        if preprocessing:
+            removeRedundancies(self.spp, start, goal)
 
         active_edges, result, hard_result = self.solveSPP(start, goal, rounding)
 
