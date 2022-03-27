@@ -1,85 +1,121 @@
 import numpy as np
-from pydrake.all import MathematicalProgram, Solve, ge
-from copy import copy
-from numbers import Number
+from pydrake.all import MathematicalProgram, Solve
 
 def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
 
     if verbose:
         print('Vertices before preprocessing:', len(gcs.Vertices()))
         print('Edges before preprocessing:', len(gcs.Edges()))
+
+    # Edges incident with each vertex.
+    inedges_w = lambda w: [k for k, e in enumerate(gcs.Edges()) if e.v() == w]
+    outedges_w = lambda w: [k for k, e in enumerate(gcs.Edges()) if e.u() == w]
+
+    # Ensure that s and t have no incoming and outgoing edges, respectively.
+    for e in inedges_w(s) + outedges_w(t):
+        gcs.RemoveEdge(e)
+
+    # Eliminate vertices that do not have incident edges.
+    # This ensures that the conservations of flow are well defined.
+    def removeIsolatedVertices():
+        isolated = lambda w: len(inedges_w(w)) == 0 and len(outedges_w(w)) == 0
+        isolated_vertices = [w for w in gcs.Vertices() if isolated(w)]
+        if s in isolated_vertices:
+            raise ValueError('Source vertex is isolated.')
+        if t in isolated_vertices:
+            raise ValueError('Target vertex is isolated.')
+        for w in isolated_vertices:
+            gcs.RemoveVertex(w)
+    removeIsolatedVertices()
+
+    # Flow from s to u.
+    nE = len(gcs.Edges())
+    eyeE = np.eye(nE)
+    zeroE = np.zeros(nE)
+    onesE = np.ones(nE)
+    prog = MathematicalProgram()
+    f = prog.NewContinuousVariables(nE, 'f')
+    f_limits = prog.AddLinearConstraint(eyeE, zeroE, onesE, f).evaluator()
+
+    # Flow from v to t.
+    g = prog.NewContinuousVariables(nE, 'g')
+    g_limits = prog.AddLinearConstraint(eyeE, zeroE, onesE, g).evaluator()
+
+    # Containers for the constraints.
+    nV = len(gcs.Vertices())
+    conservation_f = [None] * nV
+    conservation_g = [None] * nV
+    degree = [None] * nV
+
+    for i, w in enumerate(gcs.Vertices()):
     
-    for e in copy(gcs.Edges()):
-
-        prog = MathematicalProgram()
-        
-        # Flow variables from s to u.
-        nE = len(gcs.Edges())
-        if s != e.u():
-            f = prog.NewContinuousVariables(nE, 'f')
-            fs = prog.NewContinuousVariables(1)[0]
-            prog.AddLinearConstraint(ge(f, 0))
-            prog.AddLinearConstraint(fs >= 0)
+        # Conservation of flow for f.
+        Ew_in = inedges_w(w)
+        Ew_out = outedges_w(w)
+        Ew = Ew_in + Ew_out
+        fw = f[Ew]
+        A = np.hstack((np.ones((1, len(Ew_in))), - np.ones((1, len(Ew_out)))))
+        if w == s:
+            conservation_f[i] = prog.AddLinearConstraint(A, [-1], [-1], fw).evaluator()
         else:
-            f = np.zeros(nE)
-            fs = 1
-        prog.AddLinearCost(- fs)
+            conservation_f[i] = prog.AddLinearConstraint(A, [0], [0], fw).evaluator()
 
-        # Flow variables from v to t.
-        if t != e.v():
-            g = prog.NewContinuousVariables(nE, 'g')
-            gv = prog.NewContinuousVariables(1)[0]
-            prog.AddLinearConstraint(ge(g, 0))
-            prog.AddLinearConstraint(gv >= 0)
+        # Conservation of flow for g.
+        gw = g[Ew]
+        if w == t:
+            conservation_g[i] = prog.AddLinearConstraint(A, [1], [1], gw).evaluator()
         else:
-            g = np.zeros(nE)
-            gv = 1
-        prog.AddLinearCost(- gv)
-        
-        for w in gcs.Vertices():
-            
-            # Conservation of flow for f.
-            Ein = [k for k, e in enumerate(gcs.Edges()) if e.v() == w]
-            Eout = [k for k, e in enumerate(gcs.Edges()) if e.u() == w]
-            fin = sum(f[k] for k in Ein)
-            fout = sum(f[k] for k in Eout)
-            diff_f = fout - fin
-            if w == s:
-                diff_f -= fs
-            if w == e.u():
-                diff_f += fs
-            if not isinstance(diff_f, Number):
-                prog.AddLinearConstraint(diff_f == 0)
-            
-            # Conservation of flow for g.
-            gin = sum(g[k] for k in Ein)
-            gout = sum(g[k] for k in Eout)
-            diff_g = gout - gin
-            if w == e.v():
-                diff_g -= gv
-            if w == t:
-                diff_g += gv
-            if not isinstance(diff_g, Number):
-                prog.AddLinearConstraint(diff_g == 0)
-            
-            # Degree constraint for cumulative f + g.
-            if w == s or w == e.v():
-                fg_w = fout + gout
-            else:
-                fg_w = fin + gin
-            if not isinstance(fg_w, Number):
-                prog.AddLinearConstraint(fg_w <= 1)
-            
+            conservation_g[i] = prog.AddLinearConstraint(A, [0], [0], gw).evaluator()
+
+        # Degree constraints (redundant if indegree of w is 0).
+        if len(Ew_in) > 0:
+            A = np.ones((1, 2 * len(Ew_in)))
+            fgin = np.concatenate((f[Ew_in], g[Ew_in]))
+            degree[i] = prog.AddLinearConstraint(A, [0], [1], fgin).evaluator()
+
+    redundant_edges = []
+    for e in gcs.Edges():
+
+        i = gcs.Vertices().index(e.u())
+        j = gcs.Vertices().index(e.v())
+
+        # Update bounds of consevation of flow.
+        if s == e.u():
+            f_limits.set_bounds(zeroE, zeroE)
+            conservation_f[i].set_bounds([0], [0])
+        else:
+            conservation_f[i].set_bounds([1], [1])
+        if t == e.v():
+            g_limits.set_bounds(zeroE, zeroE)
+            conservation_g[j].set_bounds([0], [0])
+        else:
+            conservation_g[j].set_bounds([-1], [-1])
+
+        # Update bounds of degree constraints.
+        degree[j].set_bounds([0], [0])
+
         # Check if edge e = (u,v) is redundant. 
         result = Solve(prog)
-        if not result.is_success() or result.get_optimal_cost() > - 2 + tol:
-            gcs.RemoveEdge(e)
-            
-    # Remove isolated vertices.
-    for w in copy(gcs.Vertices()):
-        E = [e for e in gcs.Edges() if e.u() == w or e.v() == w]
-        if len(E) == 0:
-            gcs.RemoveVertex(w)
+        if not result.is_success():
+            redundant_edges.append(e)
+
+        # Reset constraint bounds.
+        if s == e.u():
+            f_limits.set_bounds(zeroE, onesE)
+            conservation_f[i].set_bounds([-1], [-1])
+        else:
+            conservation_f[i].set_bounds([0], [0])
+        if t == e.v():
+            g_limits.set_bounds(zeroE, onesE)
+            conservation_g[j].set_bounds([1], [1])
+        else:
+            conservation_g[j].set_bounds([0], [0])
+        degree[j].set_bounds([0], [1])
+
+    # Remove redundant edges and isolated vertices.
+    for e in redundant_edges:
+        gcs.RemoveEdge(e)
+    removeIsolatedVertices()
 
     if verbose:
         print('Vertices after preprocessing:', len(gcs.Vertices()))
