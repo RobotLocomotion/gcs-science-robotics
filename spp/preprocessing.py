@@ -1,7 +1,11 @@
 import numpy as np
 from pydrake.all import MathematicalProgram, Solve
+from time import time
 
 def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
+
+    # Store time necessary to run the function and to solve the optimizations.
+    preprocessing_times = {'total': time(), 'linear_programs': 0}
 
     if verbose:
         print('Vertices before preprocessing:', len(gcs.Vertices()))
@@ -98,6 +102,7 @@ def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
 
         # Check if edge e = (u,v) is redundant. 
         result = Solve(prog)
+        preprocessing_times['linear_programs'] += result.get_solver_details().optimizer_time
         if not result.is_success():
             redundant_edges.append(e)
 
@@ -119,6 +124,11 @@ def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
         gcs.RemoveEdge(e)
     removeIsolatedVertices()
 
+    preprocessing_times['total'] = time() - preprocessing_times['total']
     if verbose:
         print('Vertices after preprocessing:', len(gcs.Vertices()))
         print('Edges after preprocessing:', len(gcs.Edges()))
+        print('Total time for preprocessing:', preprocessing_times['total'])
+        print('Time spent solving linear programs:', preprocessing_times['linear_programs'])
+
+    return preprocessing_times
