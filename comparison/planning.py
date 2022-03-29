@@ -1,3 +1,4 @@
+from tracemalloc import start
 from sympy import diag
 from pydrake.planning.common_robotics_utilities import (
     Graph, GraphNode,
@@ -10,6 +11,8 @@ from pydrake.planning.common_robotics_utilities import (
     ShortcutSmoothPath,
     SimpleRRTPlannerState,
     MakeKinematicLinearBiRRTNearestNeighborsFunction,
+    MakeKinematicBiRRTExtendPropagationFunction,
+    MakeKinematicBiRRTConnectPropagationFunction,
     MakeBiRRTTimeoutTerminationFunction, 
     BiRRTPlanSinglePath, PropagatedState)
 from pydrake.common import RandomGenerator
@@ -150,6 +153,51 @@ class PRM(ClassicalPlanning):
         with open(filename, 'rb') as f:
             self.roadmap = pickle.load(f)
             self.roadmap_size = self.roadmap.Size()
+    
+    def idx2value(self, idx):
+        return self.roadmap.GetNodeImmutable(idx).GetValueImmutable()
+
+    def SubgraphsIdxAndTrees(self, include_tree_fn = lambda node_val: True):
+        milestones_idx = set(range(len(self.roadmap.GetNodesMutable())))
+        subgraphs = []
+        subtrees = []
+        
+        while len(milestones_idx) != 0:
+            #pick a random milestone
+            root = milestones_idx.pop()
+
+            subgraph = set()
+            subtree = []
+            queue = [{"parent_idx":-1, "node_index": 0, "milestone_idx":root}]
+
+            include_subtree = False
+        
+            #start expanding bfs style 
+            tree_index_cnt = 1
+            while len(queue) != 0:
+                to_expand = queue.pop(0)
+                if to_expand["milestone_idx"] in subgraph:
+                    #already expanded
+                    continue
+                
+                subgraph.add(to_expand["milestone_idx"])
+                subtree.append(SimpleRRTPlannerState(self.idx2value(to_expand["milestone_idx"]), to_expand["parent_idx"]))
+                
+                expand_node = self.roadmap.GetNodeImmutable(to_expand["milestone_idx"])
+                if include_tree_fn(self.idx2value(to_expand["milestone_idx"])):
+                    include_subtree = True
+
+                for child_idx in [edge.GetToIndex() for edge in expand_node.GetOutEdgesImmutable()]:
+                    queue.append({"parent_idx":to_expand["node_index"], "node_index": tree_index_cnt, "milestone_idx": child_idx})
+                    tree_index_cnt += 1
+        
+            if include_subtree:
+                subgraphs.append(subgraph)
+                subtrees.append(subtree)
+            #remove subgraph from milestones 
+            milestones_idx -= set(subgraph)
+
+        return zip(*sorted(zip(subgraphs, subtrees), key = lambda x: -len(x[0])))
 
 
 class BiRRT(ClassicalPlanning):
@@ -161,7 +209,7 @@ class BiRRT(ClassicalPlanning):
     
     def connect_fn(self, nearest, sample, is_start_tree):
         total_dist = self.distance_fn(nearest, sample)
-        total_steps = int(np.ceil(total_dist / self.step_size))        
+        total_steps = np.ceil(total_dist / float(self.step_size)).astype(int)        
             
         propagated_states = []
         parent_offset = -1
@@ -192,32 +240,32 @@ class BiRRT(ClassicalPlanning):
         return np.linalg.norm(source - target) < 1e-6
     
 
-    def RRT_Connect(self, q_ini, q_final):
-        start_tree = [SimpleRRTPlannerState(q_ini)]
-        end_tree = [SimpleRRTPlannerState(q_final)]
-        
+    def connect(self, start_tree, end_tree, use_parallel):
+        goal_tree_sampling_bias = len(end_tree)/(len(start_tree) + len(end_tree))
+
         def birrt_sampling():
             if np.random.rand() < self.goal_bias:
-                if np.random.rand() < 0.5:
-                    return q_ini
+                if np.random.rand() <  goal_tree_sampling_bias:
+                    return np.random.choice(end_tree).GetValueImmutable().tolist()
                 else:
-                    return q_final
+                    return np.random.choice(start_tree).GetValueImmutable().tolist()
             return np.random.rand(len(self.PositionLowerLimits))*(self.PositionUpperLimits - self.PositionLowerLimits) + self.PositionLowerLimits
 
-        nearest_neighbor_fn = MakeKinematicLinearBiRRTNearestNeighborsFunction(distance_fn = self.distance_fn, use_parallel = False)
+        nearest_neighbor_fn = MakeKinematicLinearBiRRTNearestNeighborsFunction(distance_fn = self.distance_fn, use_parallel =  use_parallel)
 
         termination_fn = MakeBiRRTTimeoutTerminationFunction(self.solve_timeout)
-        
+
+        propagate_fn = MakeKinematicBiRRTConnectPropagationFunction(self.distance_fn, self.InterpolateWaypoint, self.check_edge_validity_fn, self.step_size)
         connect_result = BiRRTPlanSinglePath(
                 start_tree=start_tree, goal_tree=end_tree,
                 state_sampling_fn=birrt_sampling,
-                nearest_neighbor_fn=nearest_neighbor_fn, propagation_fn=self.connect_fn,
+                nearest_neighbor_fn=nearest_neighbor_fn, propagation_fn=propagate_fn,
                 state_added_callback_fn=None,
                 states_connected_fn=self.states_connected_fn,
                 goal_bridge_callback_fn=None,
                 tree_sampling_bias=0.5, p_switch_tree=0.25,
                 termination_check_fn=termination_fn, rng=self.RNG)
-        return connect_result 
+        return connect_result
 
     def getPath(self, sequence, verbose = False, path_processing = lambda path: path):
         path = [sequence[0]]
@@ -225,7 +273,9 @@ class BiRRT(ClassicalPlanning):
         for start_pt, goal_pt in zip(sequence[:-1], sequence[1:]):
 
             start_time = time.time()
-            biRRT_path = self.RRT_Connect(start_pt, goal_pt).Path()
+            start_tree = [SimpleRRTPlannerState(start_pt)]
+            goal_tree = [SimpleRRTPlannerState(goal_pt)]
+            biRRT_path = self.connect(start_tree, goal_tree, False).Path()
 
             biRRT_path = path_processing(biRRT_path)
             run_time += time.time() - start_time
