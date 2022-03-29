@@ -224,7 +224,7 @@ class BezierSPP(BaseSPP):
 
 
     def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, velocity=None,
-                  zero_deriv_boundary=None):
+                  zero_deriv_boundary=None, preprocessing=False):
         assert len(source) == self.dimension
         assert len(target) == self.dimension
 
@@ -300,27 +300,13 @@ class BezierSPP(BaseSPP):
             for d_con in self.deriv_constraints:
                 edge.AddConstraint(Binding[Constraint](d_con, u.x()))
 
+        if not source_connected:
+            raise ValueError('Source vertex is not connected.')
+        if not target_connected:
+            raise ValueError('Target vertex is not connected.')
 
-        if not source_connected or not target_connected:
-            print("Source connected:", source_connected, "Target connected:", target_connected)
-
-        active_edges, result, hard_result = self.solveSPP(start, goal, rounding)
-
-        if verbose:
-            print("Solution\t",
-                  "Success:", result.get_solution_result(),
-                  "Cost:", result.get_optimal_cost(),
-                  "Solver time:", result.get_solver_details().optimizer_time)
-            if rounding and hard_result is not None:
-                print("Rounded Solutions:")
-                for r in hard_result:
-                    if r is None:
-                        print("\t\tNo path to solve")
-                        continue
-                    print("\t\t",
-                        "Success:", r.get_solution_result(),
-                        "Cost:", r.get_optimal_cost(),
-                        "Solver time:", r.get_solver_details().optimizer_time)
+        active_edges, result, hard_result = self.solveSPP(
+            start, goal, rounding, preprocessing, verbose)
 
         if active_edges is None:
             self.ResetGraph([start, goal])
