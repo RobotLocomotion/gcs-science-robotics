@@ -74,11 +74,13 @@ class LinearSPP(BaseSPP):
             edge.AddCost(Binding[Cost](
                 self.edge_cost, np.append(u.x(), goal.x())))
 
-        if not source_connected or not target_connected:
-            print("Source connected:", source_connected, "Target connected:", target_connected)
+        if not source_connected:
+            raise ValueError('Source vertex is not connected.')
+        if not target_connected:
+            raise ValueError('Target vertex is not connected.')
 
         if preprocessing:
-            removeRedundancies(self.spp, start, goal)
+            removeRedundancies(self.spp, start, goal, verbose=verbose)
 
         active_edges, result, hard_result = self.solveSPP(start, goal, rounding)
 

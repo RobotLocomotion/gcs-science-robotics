@@ -12,7 +12,10 @@ def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
     outedges_w = lambda w: [k for k, e in enumerate(gcs.Edges()) if e.u() == w]
 
     # Ensure that s and t have no incoming and outgoing edges, respectively.
-    for e in inedges_w(s) + outedges_w(t):
+    removal_edges = []
+    for k in inedges_w(s) + outedges_w(t):
+        removal_edges.append(gcs.Edges()[k])
+    for e in removal_edges:
         gcs.RemoveEdge(e)
 
     # Eliminate vertices that do not have incident edges.
@@ -30,16 +33,15 @@ def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
 
     # Flow from s to u.
     nE = len(gcs.Edges())
-    eyeE = np.eye(nE)
     zeroE = np.zeros(nE)
     onesE = np.ones(nE)
     prog = MathematicalProgram()
     f = prog.NewContinuousVariables(nE, 'f')
-    f_limits = prog.AddLinearConstraint(eyeE, zeroE, onesE, f).evaluator()
+    f_limits = prog.AddBoundingBoxConstraint(zeroE, onesE, f).evaluator()
 
     # Flow from v to t.
     g = prog.NewContinuousVariables(nE, 'g')
-    g_limits = prog.AddLinearConstraint(eyeE, zeroE, onesE, g).evaluator()
+    g_limits = prog.AddBoundingBoxConstraint(zeroE, onesE, g).evaluator()
 
     # Containers for the constraints.
     nV = len(gcs.Vertices())
@@ -56,16 +58,16 @@ def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
         fw = f[Ew]
         A = np.hstack((np.ones((1, len(Ew_in))), - np.ones((1, len(Ew_out)))))
         if w == s:
-            conservation_f[i] = prog.AddLinearConstraint(A, [-1], [-1], fw).evaluator()
+            conservation_f[i] = prog.AddLinearEqualityConstraint(A, [-1], fw).evaluator()
         else:
-            conservation_f[i] = prog.AddLinearConstraint(A, [0], [0], fw).evaluator()
+            conservation_f[i] = prog.AddLinearEqualityConstraint(A, [0], fw).evaluator()
 
         # Conservation of flow for g.
         gw = g[Ew]
         if w == t:
-            conservation_g[i] = prog.AddLinearConstraint(A, [1], [1], gw).evaluator()
+            conservation_g[i] = prog.AddLinearEqualityConstraint(A, [1], gw).evaluator()
         else:
-            conservation_g[i] = prog.AddLinearConstraint(A, [0], [0], gw).evaluator()
+            conservation_g[i] = prog.AddLinearEqualityConstraint(A, [0], gw).evaluator()
 
         # Degree constraints (redundant if indegree of w is 0).
         if len(Ew_in) > 0:
