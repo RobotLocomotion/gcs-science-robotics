@@ -36,7 +36,6 @@ from pydrake.trajectories import (
 )
 
 from spp.base import BaseSPP
-from spp.preprocessing import removeRedundancies
 
 class BezierSPP(BaseSPP):
     def __init__(self, regions, order, continuity, edges=None, hdot_min=1e-6):
@@ -306,26 +305,8 @@ class BezierSPP(BaseSPP):
         if not target_connected:
             raise ValueError('Target vertex is not connected.')
 
-        if preprocessing:
-            removeRedundancies(self.spp, start, goal, verbose=verbose)
-
-        active_edges, result, hard_result = self.solveSPP(start, goal, rounding)
-
-        if verbose:
-            print("Solution\t",
-                  "Success:", result.get_solution_result(),
-                  "Cost:", result.get_optimal_cost(),
-                  "Solver time:", result.get_solver_details().optimizer_time)
-            if rounding and hard_result is not None:
-                print("Rounded Solutions:")
-                for r in hard_result:
-                    if r is None:
-                        print("\t\tNo path to solve")
-                        continue
-                    print("\t\t",
-                        "Success:", r.get_solution_result(),
-                        "Cost:", r.get_optimal_cost(),
-                        "Solver time:", r.get_solver_details().optimizer_time)
+        active_edges, result, hard_result = self.solveSPP(
+            start, goal, rounding, preprocessing, verbose)
 
         if active_edges is None:
             self.ResetGraph([start, goal])

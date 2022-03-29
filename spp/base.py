@@ -10,6 +10,7 @@ from pydrake.solvers.mathematicalprogram import (
 from pydrake.solvers.gurobi import GurobiSolver
 from pydrake.solvers.mosek import MosekSolver
 
+from spp.preprocessing import removeRedundancies
 from spp.rounding import (
     greedyForwardPathSearch,
 )
@@ -31,6 +32,7 @@ class BaseSPP:
             assert r.ambient_dimension() == self.dimension
 
         self.spp = GraphOfConvexSets()
+        self.graph_complete = True
 
 
     def findEdgesViaOverlaps(self):
@@ -96,11 +98,25 @@ class BaseSPP:
             raise ValueError("Unrecognized file type:", file_type)
 
 
-    def solveSPP(self, start, goal, rounding):
+    def solveSPP(self, start, goal, rounding, preprocessing, verbose):
+        if not self.graph_complete:
+            raise NotImplementedError(
+                "Replanning on a graph that has undergone preprocessing is "
+                "not supported yet. Please construct a new planner.")
+        if preprocessing:
+            removeRedundancies(self.spp, start, goal, verbose=verbose)
+            self.graph_complete = False
+
         result = self.spp.SolveShortestPath(start, goal, rounding, self.solver, self.options)
         if not result.is_success():
             print("First solve failed")
             return None, result, None
+
+        if verbose:
+            print("Solution\t",
+                  "Success:", result.get_solution_result(),
+                  "Cost:", result.get_optimal_cost(),
+                  "Solver time:", result.get_solver_details().optimizer_time)
 
         # Extract path
         active_edges = []
@@ -133,6 +149,17 @@ class BaseSPP:
                     start, goal, rounding, self.solver, self.options))
                 if hard_result[-1].is_success():
                     found_solution = True
+            if verbose:
+                print("Rounded Solutions:")
+                for r in hard_result:
+                    if r is None:
+                        print("\t\tNo path to solve")
+                        continue
+                    print("\t\t",
+                        "Success:", r.get_solution_result(),
+                        "Cost:", r.get_optimal_cost(),
+                        "Solver time:", r.get_solver_details().optimizer_time)
+
             if not found_solution:
                 print("Second solve failed on all paths.")
                 return None, result, hard_result
