@@ -256,16 +256,26 @@ class BiRRT(ClassicalPlanning):
         termination_fn = MakeBiRRTTimeoutTerminationFunction(self.solve_timeout)
 
         propagate_fn = MakeKinematicBiRRTConnectPropagationFunction(self.distance_fn, self.InterpolateWaypoint, self.check_edge_validity_fn, self.step_size)
+
+        start_tree_extended = None
+        end_tree_extended = None
+        def goal_bridge_fn(start_tree, start_idx, end_tree, end_idx, is_start_tree):
+            """used to access final trees"""
+            nonlocal start_tree_extended, end_tree_extended
+            start_tree_extended = start_tree
+            end_tree_extended = end_tree
+            return None
+
         connect_result = BiRRTPlanSinglePath(
                 start_tree=start_tree, goal_tree=end_tree,
                 state_sampling_fn=birrt_sampling,
                 nearest_neighbor_fn=nearest_neighbor_fn, propagation_fn=propagate_fn,
                 state_added_callback_fn=None,
                 states_connected_fn=self.states_connected_fn,
-                goal_bridge_callback_fn=None,
+                goal_bridge_callback_fn=goal_bridge_fn,
                 tree_sampling_bias=0.5, p_switch_tree=0.25,
                 termination_check_fn=termination_fn, rng=self.RNG)
-        return connect_result
+        return connect_result, start_tree_extended, end_tree_extended
 
     def getPath(self, sequence, verbose = False, path_processing = lambda path: path):
         path = [sequence[0]]
@@ -275,7 +285,7 @@ class BiRRT(ClassicalPlanning):
             start_time = time.time()
             start_tree = [SimpleRRTPlannerState(start_pt)]
             goal_tree = [SimpleRRTPlannerState(goal_pt)]
-            biRRT_path = self.connect(start_tree, goal_tree, False).Path()
+            biRRT_path, _, _ = self.connect(start_tree, goal_tree, False).Path()
 
             biRRT_path = path_processing(biRRT_path)
             run_time += time.time() - start_time
