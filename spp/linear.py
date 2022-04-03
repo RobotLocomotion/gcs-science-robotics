@@ -78,12 +78,12 @@ class LinearSPP(BaseSPP):
         if not target_connected:
             raise ValueError('Target vertex is not connected.')
 
-        active_edges, result, hard_result = self.solveSPP(
+        active_edges, result, hard_result, statistics = self.solveSPP(
             start, goal, rounding, preprocessing, verbose)
 
         if active_edges is None:
             self.ResetGraph([start, goal])
-            return None, result, None, hard_result
+            return None, result, None, hard_result, statistics
 
         best_cost = np.inf
         best_path = None
@@ -109,4 +109,4 @@ class LinearSPP(BaseSPP):
                 [waypoints, np.expand_dims(new_waypoint, 1)], axis=1)
 
         self.ResetGraph([start, goal])
-        return waypoints, result, best_result, hard_result
+        return waypoints, result, best_result, hard_result, statistics
