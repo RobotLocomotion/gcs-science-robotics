@@ -305,12 +305,12 @@ class BezierSPP(BaseSPP):
         if not target_connected:
             raise ValueError('Target vertex is not connected.')
 
-        active_edges, result, hard_result = self.solveSPP(
+        active_edges, result, hard_result, statistics = self.solveSPP(
             start, goal, rounding, preprocessing, verbose)
 
         if active_edges is None:
             self.ResetGraph([start, goal])
-            return None, result, None, hard_result
+            return None, result, None, hard_result, statistics
 
         best_cost = np.inf
         best_path = None
@@ -355,7 +355,7 @@ class BezierSPP(BaseSPP):
         time_traj = BsplineTrajectory(BsplineBasis(self.order + 1, knots), time_control_points)
 
         self.ResetGraph([start, goal])
-        return BezierTrajectory(path, time_traj), result, best_result, hard_result
+        return BezierTrajectory(path, time_traj), result, best_result, hard_result, statistics
 
 class BezierTrajectory:
     def __init__(self, path_traj, time_traj):
