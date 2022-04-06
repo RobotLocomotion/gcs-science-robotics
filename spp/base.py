@@ -159,6 +159,9 @@ class BaseSPP:
                     start, goal, rounding, self.solver, self.options))
                 if hard_result[-1].is_success():
                     found_solution = True
+                    last_cost = hard_result[-1].get_optimal_cost()
+                    if (last_cost - statistics["result_cost"]) / last_cost < .01:
+                        break
 
             statistics["min_hard_optimal_cost"] =  min(list(map(lambda r: r.get_optimal_cost(), hard_result)), default = 0.0)
             statistics["rounding_time"] =  sum(list(map(lambda r: r.get_solver_details().optimizer_time, hard_result)))
