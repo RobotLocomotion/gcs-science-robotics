@@ -106,6 +106,7 @@ class BezierSPP(BaseSPP):
             u = vertices[ii]
             v = vertices[jj]
             edge = self.spp.AddEdge(u, v, f"({u.name()}, {v.name()})")
+            self.edge_cost_dict[edge.id()] = []
 
             for c_con in self.contin_constraints:
                 edge.AddConstraint(Binding[Constraint](
@@ -121,7 +122,8 @@ class BezierSPP(BaseSPP):
         self.edge_costs.append(time_cost)
 
         for edge in self.spp.Edges():
-            edge.AddCost(Binding[Cost](time_cost, edge.xu()))
+            self.edge_cost_dict[edge.id()].append(
+                edge.AddCost(Binding[Cost](time_cost, edge.xu()))[1])
 
     def addPathLengthCost(self, weight):
         assert isinstance(weight, float) or isinstance(weight, int)
@@ -133,7 +135,8 @@ class BezierSPP(BaseSPP):
             self.edge_costs.append(path_cost)
 
             for edge in self.spp.Edges():
-                edge.AddCost(Binding[Cost](path_cost, edge.xu()))
+                self.edge_cost_dict[edge.id()].append(
+                    edge.AddCost(Binding[Cost](path_cost, edge.xu()))[1])
 
     def addPathLengthIntegralCost(self, weight, integration_points=100):
         assert isinstance(weight, float) or isinstance(weight, int)
@@ -152,7 +155,8 @@ class BezierSPP(BaseSPP):
                 self.edge_costs.append(integral_cost)
 
                 for edge in self.spp.Edges():
-                    edge.AddCost(Binding[Cost](integral_cost, edge.xu()))
+                    self.edge_cost_dict[edge.id()].append(
+                        edge.AddCost(Binding[Cost](integral_cost, edge.xu()))[1])
         else:
             q_ds = u_path_deriv.vector_values(s_points)
             for ii in range(integration_points + 1):
@@ -167,7 +171,8 @@ class BezierSPP(BaseSPP):
                 self.edge_costs.append(integral_cost)
 
                 for edge in self.spp.Edges():
-                    edge.AddCost(Binding[Cost](integral_cost, edge.xu()))
+                    self.edge_cost_dict[edge.id()].append(
+                        edge.AddCost(Binding[Cost](integral_cost, edge.xu()))[1])
 
     def addPathEnergyCost(self, weight):
         assert isinstance(weight, float) or isinstance(weight, int)
@@ -182,25 +187,28 @@ class BezierSPP(BaseSPP):
             self.edge_costs.append(energy_cost)
 
             for edge in self.spp.Edges():
-                edge.AddCost(Binding[Cost](energy_cost, edge.xu()))
+                self.edge_cost_dict[edge.id()].append(
+                    edge.AddCost(Binding[Cost](energy_cost, edge.xu()))[1])
 
-    def addAccelerationRegularization(self, weight_rddot, weight_hddot):
-        for weight in [weight_rddot, weight_hddot]:
+    def addDerivativeRegularization(self, weight_r, weight_h, order):
+
+        assert isinstance(order, int) and 2 <= order <= self.order
+        weights = [weight_r, weight_h]
+        for weight in weights:
             assert isinstance(weight, float) or isinstance(weight, int)
 
         trajectories = [self.u_r_trajectory, self.u_h_trajectory]
-        weights = [weight_rddot, weight_hddot]
-
         for traj, weight in zip(trajectories, weights):
-            ddot_control = traj.MakeDerivative(2).control_points()
-            for c in ddot_control:
+            derivative_control = traj.MakeDerivative(order).control_points()
+            for c in derivative_control:
                 A_ctrl = DecomposeLinearExpressions(c, self.u_vars)
-                H = A_ctrl.T.dot(A_ctrl) * 2 * weight / (self.order - 1)
+                H = A_ctrl.T.dot(A_ctrl) * 2 * weight / (1 + self.order - order)
                 reg_cost = QuadraticCost(H, np.zeros(H.shape[0]), 0)
                 self.edge_costs.append(reg_cost)
 
                 for edge in self.spp.Edges():
-                    edge.AddCost(Binding[Cost](reg_cost, edge.xu()))
+                    self.edge_cost_dict[edge.id()].append(
+                        edge.AddCost(Binding[Cost](reg_cost, edge.xu()))[1])
 
     def addVelocityLimits(self, lower_bound, upper_bound):
         assert len(lower_bound) == self.dimension
@@ -270,6 +278,7 @@ class BezierSPP(BaseSPP):
         for ii in edges[0]:
             u = vertices[ii]
             edge = self.spp.AddEdge(start, u, f"(start, {u.name()})")
+            self.edge_cost_dict[edge.id()] = []
 
             for jj in range(self.dimension):
                 edge.AddConstraint(start.x()[jj] == u.x()[jj])
@@ -284,6 +293,7 @@ class BezierSPP(BaseSPP):
         for ii in edges[1]:
             u = vertices[ii]
             edge = self.spp.AddEdge(u, goal, f"({u.name()}, goal)")
+            self.edge_cost_dict[edge.id()] = []
 
             for jj in range(self.dimension):
                 edge.AddConstraint(
@@ -295,7 +305,8 @@ class BezierSPP(BaseSPP):
                     edge.AddConstraint(Binding[Constraint](f_con, u.x()))
 
             for cost in self.edge_costs:
-                edge.AddCost(Binding[Cost](cost, u.x()))
+                self.edge_cost_dict[edge.id()].append(
+                    edge.AddCost(Binding[Cost](cost, u.x()))[1])
 
             for d_con in self.deriv_constraints:
                 edge.AddConstraint(Binding[Constraint](d_con, u.x()))

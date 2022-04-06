@@ -111,7 +111,7 @@ def compile_sdf(output_file, grid, start, goal, indoor_edges, outdoor_edges, see
         "models/room_gen/half_wall_horizontal.sdf": 0.5,
         "models/room_gen/half_wall_horizontal_mirror.sdf": 0.5,
         "models/room_gen/half_wall_vertical.sdf": 0.25,
-        "models/room_gen/wall_with_center_door.sdf": 0.5,
+        "models/room_gen/wall_with_center_door_internal.sdf": 0.5,
         "": 0.25,
     }
     wall_options = {
@@ -302,14 +302,14 @@ def compile_sdf(output_file, grid, start, goal, indoor_edges, outdoor_edges, see
             ub = np.array([midpoint[0] + dx, midpoint[1] + dy , 1.8])
             regions.append(HPolyhedron.MakeBox(lb, ub))
         elif "mirror" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 1.02 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 1.05 * np.cos(theta))
+            dx = np.abs(0.35 * np.cos(theta) + 0.925 * np.sin(theta))
+            dy = np.abs(0.35 * np.sin(theta) + 0.925 * np.cos(theta))
             lb = np.array([midpoint[0] - dx - 1.25 * np.sin(theta), midpoint[1] - dy + 1.25 * np.cos(theta), 0.2])
             ub = np.array([midpoint[0] + dx - 1.25 * np.sin(theta), midpoint[1] + dy + 1.25 * np.cos(theta), 2.8])
             regions.append(HPolyhedron.MakeBox(lb, ub))
         elif "horizontal" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 1.02 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 1.05 * np.cos(theta))
+            dx = np.abs(0.35 * np.cos(theta) + 0.925 * np.sin(theta))
+            dy = np.abs(0.35 * np.sin(theta) + 0.925 * np.cos(theta))
             lb = np.array([midpoint[0] - dx + 1.25 * np.sin(theta), midpoint[1] - dy - 1.25 * np.cos(theta), 0.2])
             ub = np.array([midpoint[0] + dx + 1.25 * np.sin(theta), midpoint[1] + dy - 1.25 * np.cos(theta), 2.8])
             regions.append(HPolyhedron.MakeBox(lb, ub))

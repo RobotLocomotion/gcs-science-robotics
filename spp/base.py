@@ -12,7 +12,8 @@ from pydrake.solvers.mosek import MosekSolver
 
 from spp.preprocessing import removeRedundancies
 from spp.rounding import (
-    greedyForwardPathSearch,
+    MipPathExtraction,
+    randomForwardPathSearch,
 )
 
 class BaseSPP:
@@ -27,12 +28,13 @@ class BaseSPP:
         self.regions = regions.copy()
         self.solver = None
         self.options = None
-        self.rounding_fn = [greedyForwardPathSearch]
+        self.rounding_fn = [randomForwardPathSearch]
         for r in self.regions:
             assert r.ambient_dimension() == self.dimension
 
         self.spp = GraphOfConvexSets()
         self.graph_complete = True
+        self.edge_cost_dict = {}
 
 
     def findEdgesViaOverlaps(self):
@@ -82,10 +84,12 @@ class BaseSPP:
                              "a function or list of functions.")
 
     def ResetGraph(self, vertices):
-        for v in vertices:
-            self.spp.RemoveVertex(v)
         for edge in self.spp.Edges():
             edge.ClearPhiConstraints()
+            if edge.u() in vertices or edge.v() in vertices:
+                self.edge_cost_dict.pop(edge.id())
+        for v in vertices:
+            self.spp.RemoveVertex(v)
 
     def VisualizeGraph(self, file_type="svg"):
         graphviz = self.spp.GetGraphvizString(None, False)
@@ -123,22 +127,23 @@ class BaseSPP:
                   "Cost:", result.get_optimal_cost(),
                   "Solver time:", result.get_solver_details().optimizer_time)
 
-        # Extract path
-        active_edges = []
-        found_path = False
-        for fn in self.rounding_fn:
-            rounded_edges = fn(self.spp, result, start, goal)
-            if rounded_edges is None:
-                print(fn.__name__, "could not find a path.")
-            else:
-                found_path = True
-            active_edges.append(rounded_edges)
-        if not found_path:
-            print("All rounding strategies failed to find a path.")
-            return None, result, None, statistics
-
         # Solve with hard edge choices
         if rounding:
+            # Extract path
+            active_edges = []
+            found_path = False
+            for fn in self.rounding_fn:
+                rounded_edges = fn(self.spp, result, start, goal, edge_cost_dict=self.edge_cost_dict)
+                if rounded_edges is None:
+                    print(fn.__name__, "could not find a path.")
+                    active_edges.append(rounded_edges)
+                else:
+                    found_path = True
+                    active_edges.extend(rounded_edges)
+            if not found_path:
+                print("All rounding strategies failed to find a path.")
+                return None, result, None, statistics
+
             hard_result = []
             found_solution = False
             for path_edges in active_edges:
@@ -173,7 +178,7 @@ class BaseSPP:
                 print("Second solve failed on all paths.")
                 return None, result, hard_result, statistics
         else:
+            active_edges = MipPathExtraction(self.spp, result, start, goal)
             hard_result = [result]
-            active_edges = [active_edges[0]]
             statistics["min_hard_solver_time"] =  0.0
         return active_edges, result, hard_result, statistics

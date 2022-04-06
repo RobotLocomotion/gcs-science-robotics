@@ -35,7 +35,9 @@ class LinearSPP(BaseSPP):
             v = vertices[jj]
             edge = self.spp.AddEdge(u, v, f"({u.name()}, {v.name()})")
 
-            edge.AddCost(Binding[Cost](self.edge_cost, np.append(u.x(), v.x())))
+            edge_length = edge.AddCost(Binding[Cost](
+                self.edge_cost, np.append(u.x(), v.x())))[1]
+            self.edge_cost_dict[edge.id()] = [edge_length]
 
             # Constrain point in v to be in u
             edge.AddConstraint(Binding[Constraint](
@@ -62,6 +64,7 @@ class LinearSPP(BaseSPP):
         for ii in edges[0]:
             u = vertices[ii]
             edge = self.spp.AddEdge(start, u, f"(start, {u.name()})")
+            self.edge_cost_dict[edge.id()] = []
 
             for jj in range(self.dimension):
                 edge.AddConstraint(start.x()[jj] == u.x()[jj])
@@ -70,8 +73,9 @@ class LinearSPP(BaseSPP):
             u = vertices[ii]
             edge = self.spp.AddEdge(u, goal, f"({u.name()}, goal)")
 
-            edge.AddCost(Binding[Cost](
-                self.edge_cost, np.append(u.x(), goal.x())))
+            edge_length = edge.AddCost(Binding[Cost](
+                self.edge_cost, np.append(u.x(), goal.x())))[1]
+            self.edge_cost_dict[edge.id()] = [edge_length]
 
         if not source_connected:
             raise ValueError('Source vertex is not connected.')
