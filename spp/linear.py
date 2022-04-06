@@ -16,11 +16,15 @@ from pydrake.solvers.mathematicalprogram import (
 from spp.base import BaseSPP
 
 class LinearSPP(BaseSPP):
-    def __init__(self, regions, edges=None):
+    def __init__(self, regions, edges=None, path_weights=None):
         BaseSPP.__init__(self, regions)
 
+        if path_weights is None:
+            path_weights = np.ones(self.dimension)
+        assert len(path_weights) == self.dimension
+
         self.edge_cost = L2NormCost(
-            np.hstack((-np.eye(self.dimension), np.eye(self.dimension))),
+            np.hstack((np.diag(-path_weights), np.diag(path_weights))),
             np.zeros(self.dimension))
 
         for i, r in enumerate(self.regions):
