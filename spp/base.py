@@ -29,6 +29,7 @@ class BaseSPP:
         self.solver = None
         self.options = None
         self.rounding_fn = [randomForwardPathSearch]
+        self.rounding_kwargs = {}
         for r in self.regions:
             assert r.ambient_dimension() == self.dimension
 
@@ -71,7 +72,8 @@ class BaseSPP:
         self.options.SetOption(GurobiSolver.id(), "MIPGap", 1e-3)
         self.options.SetOption(GurobiSolver.id(), "TimeLimit", 3600.0)
 
-    def setRoundingStrategy(self, rounding_fn):
+    def setRoundingStrategy(self, rounding_fn, **kwargs):
+        self.rounding_kwargs = kwargs
         if callable(rounding_fn):
             self.rounding_fn = [rounding_fn]
         elif isinstance(rounding_fn, list):
@@ -133,7 +135,9 @@ class BaseSPP:
             active_edges = []
             found_path = False
             for fn in self.rounding_fn:
-                rounded_edges = fn(self.spp, result, start, goal, edge_cost_dict=self.edge_cost_dict)
+                rounded_edges = fn(self.spp, result, start, goal,
+                                   edge_cost_dict=self.edge_cost_dict,
+                                   **self.rounding_kwargs)
                 if rounded_edges is None:
                     print(fn.__name__, "could not find a path.")
                     active_edges.append(rounded_edges)
