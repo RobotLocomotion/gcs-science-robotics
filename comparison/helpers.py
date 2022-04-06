@@ -3,7 +3,7 @@ from pydrake.multibody.plant import AddMultibodyPlantSceneGraph, MultibodyPlant
 from pydrake.multibody.parsing import LoadModelDirectives, Parser, ProcessModelDirectives
 from pydrake.common import FindResourceOrThrow
 from pydrake.geometry import RoleAssign, Role
-from pydrake.math import RigidTransform, RollPitchYaw
+from pydrake.math import RigidTransform, RollPitchYaw, RotationMatrix
 from pydrake.all import MultibodyPositionToGeometryPose
 from pydrake.systems.primitives import TrajectorySource, Multiplexer, ConstantVectorSource
 from pydrake.geometry import SceneGraph, IllustrationProperties
@@ -11,6 +11,8 @@ from pydrake.multibody.tree import RevoluteJoint
 from pydrake.trajectories import PiecewisePolynomial
 from pydrake.systems.meshcat_visualizer import ConnectMeshcatVisualizer
 from pydrake.systems.analysis import Simulator
+from pydrake.multibody import inverse_kinematics
+from pydrake.solvers.mathematicalprogram import Solve
 
 from meshcat import Visualizer
 import matplotlib.pyplot as plt
@@ -42,6 +44,46 @@ def ForwardKinematics(q_list):
         X_list.append(plant.EvalBodyPoseInWorld(FKplant_context, plant.GetBodyByName("body")))
 
     return X_list
+
+def InverseKinematics(q0, translation, rpy):
+    builder = DiagramBuilder()
+    plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
+    parser = Parser(plant)
+    parser.package_map().Add("mp-gcs", os.path.dirname("./package.xml"))
+
+    directives_file = "./models/iiwa14_spheres_collision_welded_gripper.yaml"
+    directives = LoadModelDirectives(directives_file)
+    models = ProcessModelDirectives(directives, plant, parser)
+    [iiwa, wsg, shelf, binR, binL, table] =  models
+
+    plant.Finalize()
+
+    diagram = builder.Build()
+    
+    IKcontext = diagram.CreateDefaultContext()
+    IKplant_context = plant.GetMyMutableContextFromRoot(IKcontext)
+    
+
+    gripper_frame = plant.GetBodyByName("body").body_frame()
+    ik = inverse_kinematics.InverseKinematics(plant, IKplant_context)
+    ik.AddPositionConstraint(
+        gripper_frame, [0, 0, 0], plant.world_frame(), 
+        translation, translation)
+    
+    ik.AddOrientationConstraint(gripper_frame, RotationMatrix(), plant.world_frame(),
+                            RotationMatrix(RollPitchYaw(*rpy)), 0.001)
+        
+    prog = ik.get_mutable_prog()
+    q = ik.q()
+    
+    prog.AddQuadraticErrorCost(np.identity(len(q)), q0, q)
+    prog.SetInitialGuess(q, q0)
+    result = Solve(ik.prog())
+    if not result.is_success():
+        print("IK failed")
+        return None
+    q1 = result.GetSolution(q)
+    return q1
 
 def lower_alpha(plant, inspector, model_instances, alpha, scene_graph):
     for model in model_instances:
@@ -91,7 +133,7 @@ def make_traj(path, speed = 2):
     return PiecewisePolynomial.FirstOrderHold(t_breaks, path)
 
 
-def get_traj_length(trajectory, bspline = False):
+def get_traj_length(trajectory, bspline = False, weights = None):
     path_length = 0
     if bspline:
         knots = trajectory.vector_values(np.linspace(trajectory.start_time(), trajectory.end_time(), 1000))
@@ -99,8 +141,11 @@ def get_traj_length(trajectory, bspline = False):
         knots = trajectory.vector_values(trajectory.get_segment_times())
     
     individual_mov = []
+    if weights is None:
+        weights = np.ones(knots.shape[0])
     for ii in range(knots.shape[1] - 1):
         path_length += np.linalg.norm(knots[:, ii+1] - knots[:, ii])
+        path_length += np.sqrt(np.square(knots[:, ii+1] - knots[:, ii]).dot(weights))
         individual_mov.append([np.linalg.norm(knots[j, ii+1] - knots[j, ii]) for j in range(7)])
     
     return path_length

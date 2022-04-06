@@ -160,8 +160,8 @@ class BaseSPP:
                 if hard_result[-1].is_success():
                     found_solution = True
 
-            statistics["min_hard_solver_time"] =  min(list(map(lambda r: r.get_solver_details().optimizer_time, hard_result)), default = 0.0)
             statistics["min_hard_optimal_cost"] =  min(list(map(lambda r: r.get_optimal_cost(), hard_result)), default = 0.0)
+            statistics["rounding_time"] =  sum(list(map(lambda r: r.get_solver_details().optimizer_time, hard_result)))
 
             if verbose:
                 print("Rounded Solutions:")
@@ -180,5 +180,6 @@ class BaseSPP:
         else:
             active_edges = MipPathExtraction(self.spp, result, start, goal)
             hard_result = [result]
-            statistics["min_hard_solver_time"] =  0.0
+            statistics["rounding_time"] =  0.0
+            statistics["min_hard_optimal_cost"] =  statistics["result_cost"]
         return active_edges, result, hard_result, statistics
