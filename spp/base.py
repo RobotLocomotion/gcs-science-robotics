@@ -111,6 +111,7 @@ class BaseSPP:
         result = self.spp.SolveShortestPath(start, goal, rounding, self.solver, self.options)
 
         statistics["solver_time"] = result.get_solver_details().optimizer_time
+        statistics["result_cost"] = result.get_optimal_cost()
 
         if not result.is_success():
             print("First solve failed")
@@ -154,7 +155,8 @@ class BaseSPP:
                 if hard_result[-1].is_success():
                     found_solution = True
 
-            statistics["max_hard_solver_time"] =  min(list(map(lambda r: r.get_solver_details().optimizer_time, hard_result))) if len(hard_result) != 0 else 0.0
+            statistics["min_hard_solver_time"] =  min(list(map(lambda r: r.get_solver_details().optimizer_time, hard_result)), default = 0.0)
+            statistics["min_hard_optimal_cost"] =  min(list(map(lambda r: r.get_optimal_cost(), hard_result)), default = 0.0)
 
             if verbose:
                 print("Rounded Solutions:")
@@ -173,5 +175,5 @@ class BaseSPP:
         else:
             hard_result = [result]
             active_edges = [active_edges[0]]
-            statistics["max_hard_solver_time"] =  0.0
+            statistics["min_hard_solver_time"] =  0.0
         return active_edges, result, hard_result, statistics
