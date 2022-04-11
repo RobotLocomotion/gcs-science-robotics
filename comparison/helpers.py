@@ -144,11 +144,16 @@ def get_traj_length(trajectory, bspline = False, weights = None):
     if weights is None:
         weights = np.ones(knots.shape[0])
     for ii in range(knots.shape[1] - 1):
-        path_length += np.linalg.norm(knots[:, ii+1] - knots[:, ii])
         path_length += np.sqrt(np.square(knots[:, ii+1] - knots[:, ii]).dot(weights))
         individual_mov.append([np.linalg.norm(knots[j, ii+1] - knots[j, ii]) for j in range(7)])
     
     return path_length
+
+def is_traj_confined(trajectory, regions):
+    knots = trajectory.vector_values(np.linspace(trajectory.start_time(), trajectory.end_time(), 1000)).T
+    not_contained_knots = list(filter(lambda knot: any([r.PointInSet(knot) for r in regions.values()]), knots))
+
+    return len(not_contained_knots)/len(knots)
 
 def visualize_trajectory(zmq_url, traj_list, show_line = False, iiwa_ghosts = [], alpha = 0.5, regions = []):
     if not isinstance(traj_list, list):
