@@ -58,7 +58,17 @@ def greedyForwardPathSearch(gcs, result, source, target, flow_tol=1e-5, **kwargs
 
     return [depthFirst(source, target, getCandidateEdgesFn, edgeSelectorFn)]
 
-def randomForwardPathSearch(gcs, result, source, target, num_paths=10, seed=None, flow_tol=1e-5, **kwargs):
+def runTrials(source, target, getCandidateEdgesFn, edgeSelectorFn, max_paths=10, max_trials=1000):
+    paths = []
+    trials = 0
+    while len(paths) < max_paths and trials < max_trials:
+        trials += 1
+        path = depthFirst(source, target, getCandidateEdgesFn, edgeSelectorFn)
+        if path not in paths:
+            paths.append(path)
+    return paths
+
+def randomForwardPathSearch(gcs, result, source, target, max_paths=10, max_trials=100, seed=None, flow_tol=1e-5, **kwargs):
 
     if seed is not None:
         np.random.seed(seed)
@@ -74,7 +84,7 @@ def randomForwardPathSearch(gcs, result, source, target, num_paths=10, seed=None
         e = randomEdgeSelector(candidate_edges, flows)
         return e, e.v()
 
-    return [depthFirst(source, target, getCandidateEdgesFn, edgeSelectorFn) for _ in range(num_paths)]
+    return runTrials(source, target, getCandidateEdgesFn, edgeSelectorFn, max_paths, max_trials)
 
 def greedyBackwardPathSearch(gcs, result, source, target, flow_tol=1e-5, **kwargs):
 
@@ -91,7 +101,7 @@ def greedyBackwardPathSearch(gcs, result, source, target, flow_tol=1e-5, **kwarg
 
     return [depthFirst(target, source, getCandidateEdgesFn, edgeSelectorFn)[::-1]]
 
-def randomBackwardPathSearch(gcs, result, source, target, num_paths=10, seed=None, flow_tol=1e-5, **kwargs):
+def randomBackwardPathSearch(gcs, result, source, target, max_paths=10, max_trials=100, seed=None, flow_tol=1e-5, **kwargs):
 
     if seed is not None:
         np.random.seed(seed)
@@ -107,7 +117,9 @@ def randomBackwardPathSearch(gcs, result, source, target, num_paths=10, seed=Non
         e = randomEdgeSelector(candidate_edges, flows)
         return e, e.u()
 
-    return [depthFirst(target, source, getCandidateEdgesFn, edgeSelectorFn)[::-1] for _ in range(num_paths)]
+    paths = [pathsource, ]
+
+    return [path[::-1] for path in runTrials(target, source, getCandidateEdgesFn, edgeSelectorFn, max_paths, max_trials)]
 
 def MipPathExtraction(gcs, result, source, target, **kwargs):
     return greedyForwardPathSearch(gcs, result, source, target)
