@@ -76,8 +76,7 @@ def InverseKinematics(q0, translation, rpy):
     prog = ik.get_mutable_prog()
     q = ik.q()
     
-    # prog.AddQuadraticErrorCost(np.identity(len(q)), q0, q)
-    prog.AddQuadraticErrorCost(np.diag([1, 0, 1, 0, 1, 0, 1]), q0, q)
+    prog.AddQuadraticErrorCost(np.identity(len(q)), q0, q)
     prog.SetInitialGuess(q, q0)
     result = Solve(ik.prog())
     if not result.is_success():
