@@ -1,4 +1,5 @@
 import pydot
+import numpy as np
 
 from pydrake.geometry.optimization import (
     GraphOfConvexSets,
@@ -9,12 +10,53 @@ from pydrake.solvers.mathematicalprogram import (
 )
 from pydrake.solvers.gurobi import GurobiSolver
 from pydrake.solvers.mosek import MosekSolver
+from pydrake.all import MathematicalProgram, le
 
 from spp.preprocessing import removeRedundancies
 from spp.rounding import (
     MipPathExtraction,
     randomForwardPathSearch,
 )
+
+def polytopeDimension(A, b, tol=1e-4):
+    
+    assert A.shape[0] == b.size
+    
+    m, n = A.shape
+    eq = []
+
+    while True:
+        
+        ineq = [i for i in range(m) if i not in eq]
+        A_ineq = A[ineq]
+        b_ineq = b[ineq]
+
+        prog = MathematicalProgram()
+        x = prog.NewContinuousVariables(n)
+        r = prog.NewContinuousVariables(1)[0]
+        
+        if len(eq) > 0:
+            prog.AddLinearEqualityConstraint(A_eq.dot(x), b_eq)
+        if len(ineq) > 0:
+            c = prog.AddLinearConstraint(le(A_ineq.dot(x) + r * np.ones(len(ineq)), b_ineq))
+        prog.AddBoundingBoxConstraint(0, 1, r)
+        
+        prog.AddLinearCost(-r)
+
+        solver = MosekSolver()
+        result = solver.Solve(prog)
+
+        if not result.is_success():
+            return -1
+        
+        if result.GetSolution(r) > tol:
+            eq_rank = 0 if len(eq) == 0 else np.linalg.matrix_rank(A_eq)
+            return n - eq_rank
+        
+        c_opt = np.abs(result.GetDualSolution(c)) 
+        eq += [ineq[i] for i, ci in enumerate(c_opt) if ci > tol]
+        A_eq = A[eq]
+        b_eq = b[eq]
 
 class BaseSPP:
     def __init__(self, regions):
@@ -43,6 +85,17 @@ class BaseSPP:
         for ii in range(len(self.regions)):
             for jj in range(ii + 1, len(self.regions)):
                 if self.regions[ii].IntersectsWith(self.regions[jj]):
+                    edges.append((ii, jj))
+                    edges.append((jj, ii))
+        return edges
+
+    def findEdgesViaFullDimensionOverlaps(self):
+        edges = []
+        for ii in range(len(self.regions)):
+            for jj in range(ii + 1, len(self.regions)):
+                A = np.vstack((self.regions[ii].A(), self.regions[jj].A()))
+                b = np.concatenate((self.regions[ii].b(), self.regions[jj].b()))
+                if polytopeDimension(A, b) >= self.dimension - 1:
                     edges.append((ii, jj))
                     edges.append((jj, ii))
         return edges
@@ -164,7 +217,7 @@ class BaseSPP:
                 if hard_result[-1].is_success():
                     found_solution = True
                     last_cost = hard_result[-1].get_optimal_cost()
-                    if (last_cost - statistics["result_cost"]) / last_cost < .01:
+                    if last_cost - statistics["result_cost"] <= .01 * last_cost:
                         break
 
             statistics["min_hard_optimal_cost"] =  min(list(map(lambda r: r.get_optimal_cost(), hard_result)), default = 0.0)

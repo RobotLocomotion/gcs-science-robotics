@@ -98,7 +98,7 @@ def draw_grid_world(grid, start, goal, indoor_edges, outdoor_edges):
     plt.ylim([-2, grid.shape[1]])
     
 # Compile that into a Drake scene by assembling walls, floor, and ceiling tiles together.
-def compile_sdf(output_file, grid, start, goal, indoor_edges, outdoor_edges, seed=None, overlap=False):
+def compile_sdf(output_file, grid, start, goal, indoor_edges, outdoor_edges, seed=None):
     '''
         Glue together constituent SDFs into one big SDF for the whole scene.
     '''
@@ -144,56 +144,57 @@ def compile_sdf(output_file, grid, start, goal, indoor_edges, outdoor_edges, see
         
     regions = []
     
+    quad_radius = 0.2
+    wall_offset = 0.125 + quad_radius
+    z_min = quad_radius
+    z_max = 3 - quad_radius
+    x_cells, y_cells = grid.shape
     # Add regions for box around building
-    if overlap:
-        regions = [HPolyhedron.MakeBox([-2.5, -2.5, 0.2], [grid.shape[0] * 5 + 7.5, 2.175, 2.8]),
-                   HPolyhedron.MakeBox([-2.5, -2.5, 0.2], [2.175, grid.shape[1] * 5 + 7.5, 2.8]),
-                   HPolyhedron.MakeBox([grid.shape[0] * 5 + 2.825, -2.5, 0.2],
-                                       [grid.shape[0] * 5 + 7.5, grid.shape[1] * 5 + 7.5, 2.8]),
-                   HPolyhedron.MakeBox([-2.5, grid.shape[1] * 5 + 2.825, 0.2],
-                                       [grid.shape[0] * 5 + 7.5, grid.shape[1] * 5 + 7.5, 2.8])]
-    else:
-        regions = [HPolyhedron.MakeBox([-2.5, -2.5, 0.2], [grid.shape[0] * 5 + 7.5, 2.175, 2.8]),
-                   HPolyhedron.MakeBox([-2.5, 2.175, 0.2], [2.175, grid.shape[1] * 5 + 2.825, 2.8]),
-                   HPolyhedron.MakeBox([grid.shape[0] * 5 + 2.825, 2.175, 0.2],
-                                       [grid.shape[0] * 5 + 7.5, grid.shape[1] * 5 + 2.825, 2.8]),
-                   HPolyhedron.MakeBox([-2.5, grid.shape[1] * 5 + 2.825, 0.2],
-                                       [grid.shape[0] * 5 + 7.5, grid.shape[1] * 5 + 7.5, 2.8])]
+    regions = [HPolyhedron.MakeBox([-2.5, -2.5, z_min],
+                                    [x_cells * 5 + 7.5, 2.5 - wall_offset, z_max]),
+                HPolyhedron.MakeBox([-2.5, 2.5 - wall_offset, z_min],
+                                    [2.5 - wall_offset, y_cells * 5 + 2.5 + wall_offset, z_max]),
+                HPolyhedron.MakeBox([x_cells * 5 + 2.5 + wall_offset, 2.5 - wall_offset, z_min],
+                                    [x_cells * 5 + 7.5, y_cells * 5 + 2.5 + wall_offset, z_max]),
+                HPolyhedron.MakeBox([-2.5, y_cells * 5 + 2.5 + wall_offset, z_min],
+                                    [x_cells * 5 + 7.5, y_cells * 5 + 7.5, z_max])]
         
     # Populate floor and ceilings.
-    for i in range(-1, grid.shape[0] + 1):
-        for j in range(-1, grid.shape[1] + 1):
+    for i in range(-1, x_cells + 1):
+        for j in range(-1, y_cells + 1):
             xy = (np.array([i, j]) - start)*5
             # Floor
             tf = RigidTransform(p=np.r_[xy, 0])
             # Indoors
-            if i >= 0 and j >= 0 and i < grid.shape[0] and j < grid.shape[1] and grid[i, j] > 0.5:
+            if i >= 0 and j >= 0 and i < x_cells and j < y_cells and grid[i, j] > 0.5:
                 include_static_sdf_at_pose("floor_%05d_%05d" % (i, j), "models/room_gen/floor_indoor.sdf", tf)
                 include_static_sdf_at_pose("ceiling_%05d_%05d" % (i, j), "models/room_gen/ceiling.sdf", tf)
-                regions.append(HPolyhedron.MakeBox([xy[0]-2.175, xy[1]-2.175, 0.2], [xy[0]+2.175, xy[1]+2.175, 2.8]))
+                regions.append(HPolyhedron.MakeBox(
+                    [xy[0] - (2.5 - wall_offset), xy[1] - (2.5 - wall_offset), z_min],
+                    [xy[0] + (2.5 - wall_offset), xy[1] + (2.5 - wall_offset), z_max]))
             # Outdoors
             else:
                 include_static_sdf_at_pose("floor_%05d_%05d" % (i, j), "models/room_gen/floor_outdoor.sdf", tf)
-                if i < 0 or j < 0 or i == grid.shape[0] or j == grid.shape[1]:
+                if i < 0 or j < 0 or i == x_cells or j == y_cells:
                     continue
-                lb = [xy[0]-2.5, xy[1]-2.5, 0.2]
-                ub = [xy[0]+2.5, xy[1]+2.5, 2.8]
+                lb = [xy[0]-2.5, xy[1]-2.5, z_min]
+                ub = [xy[0]+2.5, xy[1]+2.5, z_max]
                 if i == 0:
-                    lb[0] = xy[0]-2.85
+                    lb[0] -= wall_offset
                 if j == 0:
-                    lb[1] = xy[1]-2.85
-                if i == grid.shape[0] - 1:
-                    ub[0] = xy[0]+2.85
-                if j == grid.shape[1] - 1:
-                    ub[1] = xy[1]+2.85
-                if i > 0 and j >= 0 and j < grid.shape[1] and grid[i - 1, j] > 0.5:
-                    lb[0] = xy[0]-2.175
-                if j > 0 and i >= 0 and i < grid.shape[0] and grid[i, j - 1] > 0.5:
-                    lb[1] = xy[1]-2.175
-                if i < grid.shape[0] - 1 and j >= 0 and j < grid.shape[1] and grid[i + 1, j] > 0.5:
-                    ub[0] = xy[0]+2.175
-                if j < grid.shape[1] - 1 and i >= 0 and i < grid.shape[0] and grid[i, j + 1] > 0.5:
-                    ub[1] = xy[1]+2.175
+                    lb[1] -= wall_offset
+                if i == x_cells - 1:
+                    ub[0] += wall_offset
+                if j == y_cells - 1:
+                    ub[1] += wall_offset
+                if i > 0 and j >= 0 and j < y_cells and grid[i - 1, j] > 0.5:
+                    lb[0] += wall_offset
+                if j > 0 and i >= 0 and i < x_cells and grid[i, j - 1] > 0.5:
+                    lb[1] += wall_offset
+                if i < x_cells - 1 and j >= 0 and j < y_cells and grid[i + 1, j] > 0.5:
+                    ub[0] -= wall_offset
+                if j < y_cells - 1 and i >= 0 and i < x_cells and grid[i, j + 1] > 0.5:
+                    ub[1] -= wall_offset
 
                 if np.random.random() < 1 - tree_probability:
                     regions.append(HPolyhedron.MakeBox(lb, ub))
@@ -203,19 +204,21 @@ def compile_sdf(output_file, grid, start, goal, indoor_edges, outdoor_edges, see
                     tf = RigidTransform(p=np.r_[tree_pose, 0])
                     include_static_sdf_at_pose("tree_%05d_%05d" % (i, j), "models/room_gen/tree.sdf", tf)
                     
-                    if overlap:
-                        regions.append(HPolyhedron.MakeBox(lb, [ub[0], tree_pose[1] - 0.5, ub[2]]))
-                        regions.append(HPolyhedron.MakeBox(lb, [tree_pose[0] - 0.5, ub[1], ub[2]]))
-                        regions.append(HPolyhedron.MakeBox([lb[0], tree_pose[1] + 0.5, lb[2]], ub))
-                        regions.append(HPolyhedron.MakeBox([tree_pose[0] + 0.5, lb[1], lb[2]], ub))
-                    else:
-                        regions.append(HPolyhedron.MakeBox(lb, [ub[0], tree_pose[1] - 0.5, ub[2]]))
-                        regions.append(HPolyhedron.MakeBox([lb[0], tree_pose[1] - 0.5, lb[2]],
-                                                           [tree_pose[0] - 0.5, tree_pose[1] + 0.5, ub[2]]))
-                        regions.append(HPolyhedron.MakeBox([tree_pose[0] + 0.5, tree_pose[1] - 0.5, lb[2]],
-                                                           [ub[0], tree_pose[1] + 0.5, ub[2]]))
-                        regions.append(HPolyhedron.MakeBox([lb[0], tree_pose[1] + 0.5, lb[2]], ub))
+                    regions.append(HPolyhedron.MakeBox(lb, [ub[0], tree_pose[1] - 0.5, ub[2]]))
+                    regions.append(HPolyhedron.MakeBox([lb[0], tree_pose[1] - 0.5, lb[2]],
+                                                        [tree_pose[0] - 0.5, tree_pose[1] + 0.5, ub[2]]))
+                    regions.append(HPolyhedron.MakeBox([tree_pose[0] + 0.5, tree_pose[1] - 0.5, lb[2]],
+                                                        [ub[0], tree_pose[1] + 0.5, ub[2]]))
+                    regions.append(HPolyhedron.MakeBox([lb[0], tree_pose[1] + 0.5, lb[2]], ub))
 
+    # Wall pass through constants
+    door_width = 1.25 - 2 * quad_radius
+    door_height = 2 - quad_radius
+    window_width = 1.5 - 2 * quad_radius
+    window_offset = 1.25
+    window_z_min = 0.75 + quad_radius
+    window_z_max = 2.25 - quad_radius
+    half_wall_offset = 1.25
     
     # Outer walls.
     key_options = list(wall_options.keys())
@@ -239,32 +242,32 @@ def compile_sdf(output_file, grid, start, goal, indoor_edges, outdoor_edges, see
         midpoint = (midpoint - start) * 5
         
         if "door" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 0.425 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 0.425 * np.cos(theta))
-            lb = np.array([midpoint[0] - dx, midpoint[1] - dy , 0.2])
-            ub = np.array([midpoint[0] + dx, midpoint[1] + dy , 1.8])
+            dx = np.abs(wall_offset * np.cos(theta) + door_width/2.0 * np.sin(theta))
+            dy = np.abs(wall_offset * np.sin(theta) + door_width/2.0 * np.cos(theta))
+            lb = np.array([midpoint[0] - dx, midpoint[1] - dy , z_min])
+            ub = np.array([midpoint[0] + dx, midpoint[1] + dy , door_height])
             regions.append(HPolyhedron.MakeBox(lb, ub))
         elif "left_window" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 0.55 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 0.55 * np.cos(theta))
-            lb = np.array([midpoint[0] - dx + 1.25 * np.sin(theta), midpoint[1] - dy + 1.25 * np.cos(theta), 0.95])
-            ub = np.array([midpoint[0] + dx + 1.25 * np.sin(theta), midpoint[1] + dy + 1.25 * np.cos(theta), 2.05])
+            dx = np.abs(wall_offset * np.cos(theta) + window_width/2.0 * np.sin(theta))
+            dy = np.abs(wall_offset * np.sin(theta) + window_width/2.0 * np.cos(theta))
+            lb = np.array([midpoint[0] - dx + window_offset * np.sin(theta), midpoint[1] - dy + window_offset * np.cos(theta), window_z_min])
+            ub = np.array([midpoint[0] + dx + window_offset * np.sin(theta), midpoint[1] + dy + window_offset * np.cos(theta), window_z_max])
             regions.append(HPolyhedron.MakeBox(lb, ub))
         elif "right_window" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 0.55 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 0.55 * np.cos(theta))
-            lb = np.array([midpoint[0] - dx - 1.25 * np.sin(theta), midpoint[1] - dy - 1.25 * np.cos(theta), 0.95])
-            ub = np.array([midpoint[0] + dx - 1.25 * np.sin(theta), midpoint[1] + dy - 1.25 * np.cos(theta), 2.05])
+            dx = np.abs(wall_offset * np.cos(theta) + window_width/2.0 * np.sin(theta))
+            dy = np.abs(wall_offset * np.sin(theta) + window_width/2.0 * np.cos(theta))
+            lb = np.array([midpoint[0] - dx - window_offset * np.sin(theta), midpoint[1] - dy - window_offset * np.cos(theta), window_z_min])
+            ub = np.array([midpoint[0] + dx - window_offset * np.sin(theta), midpoint[1] + dy - window_offset * np.cos(theta), window_z_max])
             regions.append(HPolyhedron.MakeBox(lb, ub))
         elif "windows" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 0.55 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 0.55 * np.cos(theta))
-            lb = np.array([midpoint[0] - dx + 1.25 * np.sin(theta), midpoint[1] - dy + 1.25 * np.cos(theta), 0.95])
-            ub = np.array([midpoint[0] + dx + 1.25 * np.sin(theta), midpoint[1] + dy + 1.25 * np.cos(theta), 2.05])
+            dx = np.abs(wall_offset * np.cos(theta) + window_width/2.0 * np.sin(theta))
+            dy = np.abs(wall_offset * np.sin(theta) + window_width/2.0 * np.cos(theta))
+            lb = np.array([midpoint[0] - dx + window_offset * np.sin(theta), midpoint[1] - dy + window_offset * np.cos(theta), window_z_min])
+            ub = np.array([midpoint[0] + dx + window_offset * np.sin(theta), midpoint[1] + dy + window_offset * np.cos(theta), window_z_max])
             regions.append(HPolyhedron.MakeBox(lb, ub))
             
-            lb = np.array([midpoint[0] - dx - 1.25 * np.sin(theta), midpoint[1] - dy - 1.25 * np.cos(theta), 0.95])
-            ub = np.array([midpoint[0] + dx - 1.25 * np.sin(theta), midpoint[1] + dy - 1.25 * np.cos(theta), 2.05])
+            lb = np.array([midpoint[0] - dx - window_offset * np.sin(theta), midpoint[1] - dy - window_offset * np.cos(theta), window_z_min])
+            ub = np.array([midpoint[0] + dx - window_offset * np.sin(theta), midpoint[1] + dy - window_offset * np.cos(theta), window_z_max])
             regions.append(HPolyhedron.MakeBox(lb, ub))
 
         tf = RigidTransform(p=np.r_[midpoint, 0], rpy=RollPitchYaw(0, 0, -theta))
@@ -289,35 +292,35 @@ def compile_sdf(output_file, grid, start, goal, indoor_edges, outdoor_edges, see
         midpoint = (midpoint - start) * 5
         
         if sdf_key == "":
-            dx = np.abs(0.35 * np.cos(theta) + 2.175 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 2.175 * np.cos(theta))
-            lb = np.array([midpoint[0] - dx, midpoint[1] - dy , 0.2])
-            ub = np.array([midpoint[0] + dx, midpoint[1] + dy , 2.8])
+            dx = np.abs(wall_offset * np.cos(theta) + (2.5 - wall_offset) * np.sin(theta))
+            dy = np.abs(wall_offset * np.sin(theta) + (2.5 - wall_offset) * np.cos(theta))
+            lb = np.array([midpoint[0] - dx, midpoint[1] - dy , z_min])
+            ub = np.array([midpoint[0] + dx, midpoint[1] + dy , z_max])
             regions.append(HPolyhedron.MakeBox(lb, ub))
             continue
         elif "door" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 0.425 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 0.425 * np.cos(theta))
-            lb = np.array([midpoint[0] - dx, midpoint[1] - dy , 0.2])
-            ub = np.array([midpoint[0] + dx, midpoint[1] + dy , 1.8])
+            dx = np.abs(wall_offset * np.cos(theta) + door_width/2.0 * np.sin(theta))
+            dy = np.abs(wall_offset * np.sin(theta) + door_width/2.0 * np.cos(theta))
+            lb = np.array([midpoint[0] - dx, midpoint[1] - dy , z_min])
+            ub = np.array([midpoint[0] + dx, midpoint[1] + dy , door_height])
             regions.append(HPolyhedron.MakeBox(lb, ub))
         elif "mirror" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 0.925 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 0.925 * np.cos(theta))
-            lb = np.array([midpoint[0] - dx - 1.25 * np.sin(theta), midpoint[1] - dy + 1.25 * np.cos(theta), 0.2])
-            ub = np.array([midpoint[0] + dx - 1.25 * np.sin(theta), midpoint[1] + dy + 1.25 * np.cos(theta), 2.8])
+            dx = np.abs(wall_offset * np.cos(theta) + (1.25 - wall_offset) * np.sin(theta))
+            dy = np.abs(wall_offset * np.sin(theta) + (1.25 - wall_offset) * np.cos(theta))
+            lb = np.array([midpoint[0] - dx - half_wall_offset * np.sin(theta), midpoint[1] - dy + half_wall_offset * np.cos(theta), z_min])
+            ub = np.array([midpoint[0] + dx - half_wall_offset * np.sin(theta), midpoint[1] + dy + half_wall_offset * np.cos(theta), z_max])
             regions.append(HPolyhedron.MakeBox(lb, ub))
         elif "horizontal" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 0.925 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 0.925 * np.cos(theta))
-            lb = np.array([midpoint[0] - dx + 1.25 * np.sin(theta), midpoint[1] - dy - 1.25 * np.cos(theta), 0.2])
-            ub = np.array([midpoint[0] + dx + 1.25 * np.sin(theta), midpoint[1] + dy - 1.25 * np.cos(theta), 2.8])
+            dx = np.abs(wall_offset * np.cos(theta) + (1.25 - wall_offset) * np.sin(theta))
+            dy = np.abs(wall_offset * np.sin(theta) + (1.25 - wall_offset) * np.cos(theta))
+            lb = np.array([midpoint[0] - dx + half_wall_offset * np.sin(theta), midpoint[1] - dy - half_wall_offset * np.cos(theta), z_min])
+            ub = np.array([midpoint[0] + dx + half_wall_offset * np.sin(theta), midpoint[1] + dy - half_wall_offset * np.cos(theta), z_max])
             regions.append(HPolyhedron.MakeBox(lb, ub))
         elif "vertical" in sdf_key:
-            dx = np.abs(0.35 * np.cos(theta) + 2.175 * np.sin(theta))
-            dy = np.abs(0.35 * np.sin(theta) + 2.175 * np.cos(theta))
+            dx = np.abs(wall_offset * np.cos(theta) + (2.5 - wall_offset) * np.sin(theta))
+            dy = np.abs(wall_offset * np.sin(theta) + (2.5 - wall_offset) * np.cos(theta))
             lb = np.array([midpoint[0] - dx, midpoint[1] - dy, 1.7])
-            ub = np.array([midpoint[0] + dx, midpoint[1] + dy, 2.8])
+            ub = np.array([midpoint[0] + dx, midpoint[1] + dy, z_max])
             regions.append(HPolyhedron.MakeBox(lb, ub))
 
         tf = RigidTransform(p=np.r_[midpoint, 0], rpy=RollPitchYaw(0, 0, theta))

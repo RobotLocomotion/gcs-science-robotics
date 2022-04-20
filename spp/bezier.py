@@ -38,7 +38,7 @@ from pydrake.trajectories import (
 from spp.base import BaseSPP
 
 class BezierSPP(BaseSPP):
-    def __init__(self, regions, order, continuity, edges=None, hdot_min=1e-6):
+    def __init__(self, regions, order, continuity, edges=None, hdot_min=1e-6, full_dim_overlap=False):
         BaseSPP.__init__(self, regions)
 
         self.order = order
@@ -99,7 +99,10 @@ class BezierSPP(BaseSPP):
 
         # Add edges to graph and apply costs/constraints
         if edges is None:
-            edges = self.findEdgesViaOverlaps()
+            if full_dim_overlap:
+                edges = self.findEdgesViaFullDimensionOverlaps()
+            else:
+                edges = self.findEdgesViaOverlaps()
 
         vertices = self.spp.Vertices()
         for ii, jj in edges:

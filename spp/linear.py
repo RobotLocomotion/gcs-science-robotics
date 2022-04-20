@@ -16,7 +16,7 @@ from pydrake.solvers.mathematicalprogram import (
 from spp.base import BaseSPP
 
 class LinearSPP(BaseSPP):
-    def __init__(self, regions, edges=None, path_weights=None):
+    def __init__(self, regions, edges=None, path_weights=None, full_dim_overlap=False):
         BaseSPP.__init__(self, regions)
 
         if path_weights is None:
@@ -31,7 +31,10 @@ class LinearSPP(BaseSPP):
             self.spp.AddVertex(r, name = self.names[i] if not self.names is None else '')
 
         if edges is None:
-            edges = self.findEdgesViaOverlaps()
+            if full_dim_overlap:
+                edges = self.findEdgesViaFullDimensionOverlaps()
+            else:
+                edges = self.findEdgesViaOverlaps()
 
         vertices = self.spp.Vertices()
         for ii, jj in edges:
