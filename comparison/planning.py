@@ -1,5 +1,3 @@
-from tracemalloc import start
-from sympy import diag
 from pydrake.planning.common_robotics_utilities import (
     Graph, GraphNode,
     GrowRoadMap,

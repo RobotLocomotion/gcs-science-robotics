@@ -3,35 +3,26 @@
 Code for Motion Planning around Obstacles with Convex Optimization
 
 ## Installing Dependencies
-This code depends on [Drake](https://drake.mit.edu), specifically its Python bindings. To install the bindings run
+This code depends on [Drake](https://drake.mit.edu), specifically its Python bindings. To install the bindings and other dependencies, run
 
 ```
-sudo apt-get update
-sudo apt-get install --no-install-recommends \
-  ca-certificates gnupg lsb-release wget
-wget -qO- https://drake-apt.csail.mit.edu/drake.asc | gpg --dearmor - \
-  | sudo tee /etc/apt/trusted.gpg.d/drake.gpg >/dev/null
-echo "deb [arch=amd64] https://drake-apt.csail.mit.edu/$(lsb_release -cs) $(lsb_release -cs) main" \
-  | sudo tee /etc/apt/sources.list.d/drake.list >/dev/null
-sudo apt-get update
-sudo apt-get install --no-install-recommends drake-dev
+pip install -r requirements.txt
 ```
 
-To ensure that Python can find the bindings make sure to add drake to the PYTHONPATH.  To do this add one of the following:
+Drake also requires a couple additional libraries.  To install them follow the below instuctions.
 
 For Ubuntu 18.04:
 ```
-export PYTHONPATH=/opt/drake/lib/python3.6/site-packages:$PYTHONPATH
+sudo apt-get update
+sudo apt-get install --no-install-recommends \
+  libpython3.6 libx11-6 libsm6 libxt6 libglib2.0-0
 ```
 
 For Ubuntu 20.04:
 ```
-export PYTHONPATH=/opt/drake/lib/python3.8/site-packages:$PYTHONPATH
-```
-
-For macOS:
-```
-export PYTHONPATH=/opt/drake/lib/python3.9/site-packages:$PYTHONPATH
+sudo apt-get update
+sudo apt-get install --no-install-recommends \
+  libpython3.8 libx11-6 libsm6 libxt6 libglib2.0-0
 ```
 
 ### Running the Sampling Based Comparison

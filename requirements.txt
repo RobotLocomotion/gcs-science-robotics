@@ -1,0 +1,11 @@
+drake==1.1
+lxml
+matplotlib
+networkx
+notebook
+numpy
+pandas
+pydot
+scipy
+
+  # IPython jupyter
