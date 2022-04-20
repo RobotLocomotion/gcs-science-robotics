@@ -24,7 +24,7 @@ def ForwardKinematics(q_list):
     builder = DiagramBuilder()
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
     parser = Parser(plant)
-    parser.package_map().Add("mp-gcs", os.path.dirname("./package.xml"))
+    parser.package_map().Add("gcs", os.path.dirname("./package.xml"))
 
     directives_file = "./models/iiwa14_spheres_collision_welded_gripper.yaml"
     directives = LoadModelDirectives(directives_file)
@@ -49,7 +49,7 @@ def InverseKinematics(q0, translation, rpy):
     builder = DiagramBuilder()
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
     parser = Parser(plant)
-    parser.package_map().Add("mp-gcs", os.path.dirname("./package.xml"))
+    parser.package_map().Add("gcs", os.path.dirname("./package.xml"))
 
     directives_file = "./models/iiwa14_spheres_collision_welded_gripper.yaml"
     directives = LoadModelDirectives(directives_file)
@@ -171,7 +171,7 @@ def visualize_trajectory(zmq_url, traj_list, show_line = False, iiwa_ghosts = []
     
     
     parser = Parser(plant, scene_graph)
-    parser.package_map().Add("mp-gcs", os.path.dirname("./package.xml"))
+    parser.package_map().Add("gcs", os.path.dirname("./package.xml"))
 
     directives_file = "./models/iiwa14_spheres_collision_welded_gripper.yaml"
     directives = LoadModelDirectives(directives_file)
