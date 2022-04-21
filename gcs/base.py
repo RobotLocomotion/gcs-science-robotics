@@ -12,8 +12,8 @@ from pydrake.solvers.gurobi import GurobiSolver
 from pydrake.solvers.mosek import MosekSolver
 from pydrake.all import MathematicalProgram, le
 
-from spp.preprocessing import removeRedundancies
-from spp.rounding import (
+from gcs.preprocessing import removeRedundancies
+from gcs.rounding import (
     MipPathExtraction,
     randomForwardPathSearch,
 )
@@ -58,7 +58,7 @@ def polytopeDimension(A, b, tol=1e-4):
         A_eq = A[eq]
         b_eq = b[eq]
 
-class BaseSPP:
+class BaseGCS:
     def __init__(self, regions):
         self.names = None
         if type(regions) is dict:
@@ -75,7 +75,7 @@ class BaseSPP:
         for r in self.regions:
             assert r.ambient_dimension() == self.dimension
 
-        self.spp = GraphOfConvexSets()
+        self.gcs = GraphOfConvexSets()
         self.graph_complete = True
         self.edge_cost_dict = {}
 
@@ -139,15 +139,15 @@ class BaseSPP:
                              "a function or list of functions.")
 
     def ResetGraph(self, vertices):
-        for edge in self.spp.Edges():
+        for edge in self.gcs.Edges():
             edge.ClearPhiConstraints()
             if edge.u() in vertices or edge.v() in vertices:
                 self.edge_cost_dict.pop(edge.id())
         for v in vertices:
-            self.spp.RemoveVertex(v)
+            self.gcs.RemoveVertex(v)
 
     def VisualizeGraph(self, file_type="svg"):
-        graphviz = self.spp.GetGraphvizString(None, False)
+        graphviz = self.gcs.GetGraphvizString(None, False)
         data = pydot.graph_from_dot_data(graphviz)[0]
         if file_type == "svg":
             return data.create_svg()
@@ -157,17 +157,17 @@ class BaseSPP:
             raise ValueError("Unrecognized file type:", file_type)
 
 
-    def solveSPP(self, start, goal, rounding, preprocessing, verbose):
+    def solveGCS(self, start, goal, rounding, preprocessing, verbose):
         if not self.graph_complete:
             raise NotImplementedError(
                 "Replanning on a graph that has undergone preprocessing is "
                 "not supported yet. Please construct a new planner.")
         statistics = {}
         if preprocessing:
-            statistics["preprocessing"] = removeRedundancies(self.spp, start, goal, verbose=verbose)
+            statistics["preprocessing"] = removeRedundancies(self.gcs, start, goal, verbose=verbose)
             self.graph_complete = False
 
-        result = self.spp.SolveShortestPath(start, goal, rounding, self.solver, self.options)
+        result = self.gcs.SolveShortestPath(start, goal, rounding, self.solver, self.options)
 
         statistics["solver_time"] = result.get_solver_details().optimizer_time
         statistics["result_cost"] = result.get_optimal_cost()
@@ -188,7 +188,7 @@ class BaseSPP:
             active_edges = []
             found_path = False
             for fn in self.rounding_fn:
-                rounded_edges = fn(self.spp, result, start, goal,
+                rounded_edges = fn(self.gcs, result, start, goal,
                                    edge_cost_dict=self.edge_cost_dict,
                                    **self.rounding_kwargs)
                 if rounded_edges is None:
@@ -207,12 +207,12 @@ class BaseSPP:
                 if path_edges is None:
                     hard_result.append(None)
                     continue
-                for edge in self.spp.Edges():
+                for edge in self.gcs.Edges():
                     if edge in path_edges:
                         edge.AddPhiConstraint(True)
                     else:
                         edge.AddPhiConstraint(False)
-                hard_result.append(self.spp.SolveShortestPath(
+                hard_result.append(self.gcs.SolveShortestPath(
                     start, goal, rounding, self.solver, self.options))
                 if hard_result[-1].is_success():
                     found_solution = True
@@ -238,7 +238,7 @@ class BaseSPP:
                 print("Second solve failed on all paths.")
                 return None, result, hard_result, statistics
         else:
-            active_edges = MipPathExtraction(self.spp, result, start, goal)
+            active_edges = MipPathExtraction(self.gcs, result, start, goal)
             hard_result = [result]
             statistics["rounding_time"] =  0.0
             statistics["min_hard_optimal_cost"] =  statistics["result_cost"]

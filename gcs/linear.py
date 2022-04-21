@@ -13,11 +13,11 @@ from pydrake.solvers.mathematicalprogram import (
     LinearConstraint,
 )
 
-from spp.base import BaseSPP
+from gcs.base import BaseGCS
 
-class LinearSPP(BaseSPP):
+class LinearGCS(BaseGCS):
     def __init__(self, regions, edges=None, path_weights=None, full_dim_overlap=False):
-        BaseSPP.__init__(self, regions)
+        BaseGCS.__init__(self, regions)
 
         if path_weights is None:
             path_weights = np.ones(self.dimension)
@@ -28,7 +28,7 @@ class LinearSPP(BaseSPP):
             np.zeros(self.dimension))
 
         for i, r in enumerate(self.regions):
-            self.spp.AddVertex(r, name = self.names[i] if not self.names is None else '')
+            self.gcs.AddVertex(r, name = self.names[i] if not self.names is None else '')
 
         if edges is None:
             if full_dim_overlap:
@@ -36,11 +36,11 @@ class LinearSPP(BaseSPP):
             else:
                 edges = self.findEdgesViaOverlaps()
 
-        vertices = self.spp.Vertices()
+        vertices = self.gcs.Vertices()
         for ii, jj in edges:
             u = vertices[ii]
             v = vertices[jj]
-            edge = self.spp.AddEdge(u, v, f"({u.name()}, {v.name()})")
+            edge = self.gcs.AddEdge(u, v, f"({u.name()}, {v.name()})")
 
             edge_length = edge.AddCost(Binding[Cost](
                 self.edge_cost, np.append(u.x(), v.x())))[1]
@@ -58,9 +58,9 @@ class LinearSPP(BaseSPP):
         assert len(target) == self.dimension
 
         # Add source and target vertices
-        vertices = self.spp.Vertices()
-        start = self.spp.AddVertex(Point(source), "start")
-        goal = self.spp.AddVertex(Point(target), "goal")
+        vertices = self.gcs.Vertices()
+        start = self.gcs.AddVertex(Point(source), "start")
+        goal = self.gcs.AddVertex(Point(target), "goal")
 
         # Add edges connecting source and target to graph
         if edges is None:
@@ -70,7 +70,7 @@ class LinearSPP(BaseSPP):
 
         for ii in edges[0]:
             u = vertices[ii]
-            edge = self.spp.AddEdge(start, u, f"(start, {u.name()})")
+            edge = self.gcs.AddEdge(start, u, f"(start, {u.name()})")
             self.edge_cost_dict[edge.id()] = []
 
             for jj in range(self.dimension):
@@ -78,7 +78,7 @@ class LinearSPP(BaseSPP):
 
         for ii in edges[1]:
             u = vertices[ii]
-            edge = self.spp.AddEdge(u, goal, f"({u.name()}, goal)")
+            edge = self.gcs.AddEdge(u, goal, f"({u.name()}, goal)")
 
             edge_length = edge.AddCost(Binding[Cost](
                 self.edge_cost, np.append(u.x(), goal.x())))[1]
@@ -89,7 +89,7 @@ class LinearSPP(BaseSPP):
         if not target_connected:
             raise ValueError('Target vertex is not connected.')
 
-        active_edges, result, hard_result, statistics = self.solveSPP(
+        active_edges, result, hard_result, statistics = self.solveGCS(
             start, goal, rounding, preprocessing, verbose)
 
         if active_edges is None:

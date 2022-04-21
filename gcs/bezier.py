@@ -35,11 +35,11 @@ from pydrake.trajectories import (
     Trajectory,
 )
 
-from spp.base import BaseSPP
+from gcs.base import BaseGCS
 
-class BezierSPP(BaseSPP):
+class BezierGCS(BaseGCS):
     def __init__(self, regions, order, continuity, edges=None, hdot_min=1e-6, full_dim_overlap=False):
-        BaseSPP.__init__(self, regions)
+        BaseGCS.__init__(self, regions)
 
         self.order = order
         self.continuity = continuity
@@ -51,7 +51,7 @@ class BezierSPP(BaseSPP):
         self.time_scaling_set = HPolyhedron(A_time, b_time)
 
         for r in self.regions:
-            self.spp.AddVertex(
+            self.gcs.AddVertex(
                 r.CartesianPower(order + 1).CartesianProduct(self.time_scaling_set))
 
         # Formulate edge costs and constraints
@@ -104,11 +104,11 @@ class BezierSPP(BaseSPP):
             else:
                 edges = self.findEdgesViaOverlaps()
 
-        vertices = self.spp.Vertices()
+        vertices = self.gcs.Vertices()
         for ii, jj in edges:
             u = vertices[ii]
             v = vertices[jj]
-            edge = self.spp.AddEdge(u, v, f"({u.name()}, {v.name()})")
+            edge = self.gcs.AddEdge(u, v, f"({u.name()}, {v.name()})")
             self.edge_cost_dict[edge.id()] = []
 
             for c_con in self.contin_constraints:
@@ -124,7 +124,7 @@ class BezierSPP(BaseSPP):
             weight * DecomposeLinearExpressions(segment_time, self.u_vars)[0], 0.)
         self.edge_costs.append(time_cost)
 
-        for edge in self.spp.Edges():
+        for edge in self.gcs.Edges():
             self.edge_cost_dict[edge.id()].append(
                 edge.AddCost(Binding[Cost](time_cost, edge.xu()))[1])
 
@@ -137,7 +137,7 @@ class BezierSPP(BaseSPP):
             path_cost = L2NormCost(weight * H, np.zeros(self.dimension))
             self.edge_costs.append(path_cost)
 
-            for edge in self.spp.Edges():
+            for edge in self.gcs.Edges():
                 self.edge_cost_dict[edge.id()].append(
                     edge.AddCost(Binding[Cost](path_cost, edge.xu()))[1])
 
@@ -157,7 +157,7 @@ class BezierSPP(BaseSPP):
                 integral_cost = L2NormCost(weight * H, np.zeros(self.dimension))
                 self.edge_costs.append(integral_cost)
 
-                for edge in self.spp.Edges():
+                for edge in self.gcs.Edges():
                     self.edge_cost_dict[edge.id()].append(
                         edge.AddCost(Binding[Cost](integral_cost, edge.xu()))[1])
         else:
@@ -173,7 +173,7 @@ class BezierSPP(BaseSPP):
                 integral_cost = L2NormCost(weight * H, np.zeros(self.dimension))
                 self.edge_costs.append(integral_cost)
 
-                for edge in self.spp.Edges():
+                for edge in self.gcs.Edges():
                     self.edge_cost_dict[edge.id()].append(
                         edge.AddCost(Binding[Cost](integral_cost, edge.xu()))[1])
 
@@ -189,7 +189,7 @@ class BezierSPP(BaseSPP):
             energy_cost = PerspectiveQuadraticCost(H, np.zeros(H.shape[0]))
             self.edge_costs.append(energy_cost)
 
-            for edge in self.spp.Edges():
+            for edge in self.gcs.Edges():
                 self.edge_cost_dict[edge.id()].append(
                     edge.AddCost(Binding[Cost](energy_cost, edge.xu()))[1])
 
@@ -209,7 +209,7 @@ class BezierSPP(BaseSPP):
                 reg_cost = QuadraticCost(H, np.zeros(H.shape[0]), 0)
                 self.edge_costs.append(reg_cost)
 
-                for edge in self.spp.Edges():
+                for edge in self.gcs.Edges():
                     self.edge_cost_dict[edge.id()].append(
                         edge.AddCost(Binding[Cost](reg_cost, edge.xu()))[1])
 
@@ -230,7 +230,7 @@ class BezierSPP(BaseSPP):
                 A_constraint, -np.inf*np.ones(2*self.dimension), np.zeros(2*self.dimension))
             self.deriv_constraints.append(velocity_con)
 
-            for edge in self.spp.Edges():
+            for edge in self.gcs.Edges():
                 edge.AddConstraint(Binding[Constraint](velocity_con, edge.xu()))
 
 
@@ -267,10 +267,10 @@ class BezierSPP(BaseSPP):
                     DecomposeLinearExpressions(np.squeeze(u_path_control[-1]), self.u_vars),
                     np.zeros(self.dimension)))
 
-        vertices = self.spp.Vertices()
+        vertices = self.gcs.Vertices()
         # Add edges connecting source and target to graph
-        start = self.spp.AddVertex(Point(source), "start")
-        goal = self.spp.AddVertex(Point(target), "goal")
+        start = self.gcs.AddVertex(Point(source), "start")
+        goal = self.gcs.AddVertex(Point(target), "goal")
 
         # Add edges connecting source and target to graph
         if edges is None:
@@ -280,7 +280,7 @@ class BezierSPP(BaseSPP):
 
         for ii in edges[0]:
             u = vertices[ii]
-            edge = self.spp.AddEdge(start, u, f"(start, {u.name()})")
+            edge = self.gcs.AddEdge(start, u, f"(start, {u.name()})")
             self.edge_cost_dict[edge.id()] = []
 
             for jj in range(self.dimension):
@@ -295,7 +295,7 @@ class BezierSPP(BaseSPP):
 
         for ii in edges[1]:
             u = vertices[ii]
-            edge = self.spp.AddEdge(u, goal, f"({u.name()}, goal)")
+            edge = self.gcs.AddEdge(u, goal, f"({u.name()}, goal)")
             self.edge_cost_dict[edge.id()] = []
 
             for jj in range(self.dimension):
@@ -319,7 +319,7 @@ class BezierSPP(BaseSPP):
         if not target_connected:
             raise ValueError('Target vertex is not connected.')
 
-        active_edges, result, hard_result, statistics = self.solveSPP(
+        active_edges, result, hard_result, statistics = self.solveGCS(
             start, goal, rounding, preprocessing, verbose)
 
         if active_edges is None:
