@@ -310,9 +310,10 @@ def getLinearSppPath(regions, sequence):
     return np.stack(path).T, run_time
 
 def getBezierSppPath(plant, regions, sequence, order, continuity, hdot_min = 1e-3):
-    run_time = 0.0
+    run_time = []
     trajectories = []
     for start_pt, goal_pt in zip(sequence[:-1], sequence[1:]):
+        segment_run_time = 0.0
         spp = BezierSPP(regions, order, continuity)
         spp.addTimeCost(1)
         spp.addPathLengthCost(1)
@@ -320,7 +321,7 @@ def getBezierSppPath(plant, regions, sequence, order, continuity, hdot_min = 1e-
         spp.addVelocityLimits(0.6*plant.GetVelocityLowerLimits(), 0.6*plant.GetVelocityUpperLimits())
         spp.setPaperSolverOptions()
         spp.setSolver(MosekSolver())
-        spp.setRoundingStrategy([greedyForwardPathSearch, greedyBackwardPathSearch, averageVertexPositionSpp])
+        spp.setRoundingStrategy(randomForwardPathSearch, max_paths = 10, max_trials = 100, seed = 0)
         
         start_time = time.time()
         segment_traj, result, best_result, hard_result, stats = spp.SolvePath(
@@ -329,17 +330,15 @@ def getBezierSppPath(plant, regions, sequence, order, continuity, hdot_min = 1e-
             print(f"Failed between {start_pt} and {goal_pt}")
             return None
         print(f"Planned segment in {np.round(time.time() - start_time, 4)}", flush=True)
-        run_time += result.get_solver_details().optimizer_time
-        # max_hard_result_time = 0
-        # for r in hard_result:
-        #     if r.get_solver_details().optimizer_time > max_hard_result_time:
-        #         max_hard_result_time = r.get_solver_details().optimizer_time
-        # run_time += max_hard_result_time
+        segment_run_time += result.get_solver_details().optimizer_time
         for r in hard_result:
-            run_time += r.get_solver_details().optimizer_time
-        run_time += stats["preprocessing"]['linear_programs']
+            segment_run_time += r.get_solver_details().optimizer_time
+        segment_run_time += stats["preprocessing"]['linear_programs']
         trajectories.append(segment_traj)
-        print("Certified Optimality Gap:",
+        run_time.append(segment_run_time)
+        print("\tRounded cost:", np.round(best_result.get_optimal_cost(), 4),
+              "\tRelaxed cost:", np.round(result.get_optimal_cost(), 4))
+        print("\tCertified Optimality Gap:",
              (best_result.get_optimal_cost()-result.get_optimal_cost())/result.get_optimal_cost())
         
     return trajectories, run_time
