@@ -1,6 +1,4 @@
-# MP-GCS Motion Planning on Graph of Convex Sets
-
-Code for Motion Planning around Obstacles with Convex Optimization
+# GCS - Motion Planning around Obstacles with Convex Optimization
 
 ## Installing Dependencies
 This code depends on [Drake](https://drake.mit.edu), specifically its Python bindings. To install the bindings and other dependencies, run
@@ -26,10 +24,10 @@ sudo apt-get install --no-install-recommends \
 ```
 
 ### Running the Sampling Based Comparison
-If you want to compare MP-GCS to sampling based planners (such as PRM), you'll need to install a custom fork of drake that includes bindings for sampling based planners.  To do this run the following, including any of the proprietary solvers you have access to.
+If you want to compare GCS to sampling based planners (such as PRM), you'll need to install a custom fork of drake that includes bindings for sampling based planners.  To do this run the following, including any of the proprietary solvers you have access to.
 
 ```
-git clone -b mp-gcs git@github.com:mpetersen94/drake.git
+git clone -b gcs git@github.com:mpetersen94/drake.git
 mkdir drake-build
 cd drake-build
 cmake [-DWITH_GUROBI=ON -DWITH_MOSEK=ON -DWITH_ROBOTLOCOMOTION_SNOPT=ON] ../drake

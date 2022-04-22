@@ -13,9 +13,9 @@ from pydrake.solvers.mathematicalprogram import Solve
 from pydrake.solvers.mosek import MosekSolver
 from pydrake.systems.framework import LeafSystem
 
-from spp.bezier import BezierSPP
-from spp.linear import LinearSPP
-from spp.rounding import *
+from gcs.bezier import BezierGCS
+from gcs.linear import LinearGCS
+from gcs.rounding import *
 
 def getIkSeeds():
     return {
@@ -283,16 +283,16 @@ def visualizeConfig(diagram, plant, context, q):
     plant.SetPositions(plant_context, q)
     diagram.Publish(context)
 
-def getLinearSppPath(regions, sequence):
+def getLinearGcsPath(regions, sequence):
     path = [sequence[0]]
     run_time = 0.0
     for start_pt, goal_pt in zip(sequence[:-1], sequence[1:]):
-        spp = LinearSPP(regions)
-        spp.setPaperSolverOptions()
-        spp.setSolver(MosekSolver())
+        gcs = LinearGCS(regions)
+        gcs.setPaperSolverOptions()
+        gcs.setSolver(MosekSolver())
         
         start_time = time.time()
-        waypoints, result, best_result, hard_result, _ = spp.SolvePath(start_pt, goal_pt, True,
+        waypoints, result, best_result, hard_result, _ = gcs.SolvePath(start_pt, goal_pt, True,
                                                                     False, preprocessing=True)
         if waypoints is None:
             print(f"Failed between {start_pt} and {goal_pt}")
@@ -309,22 +309,21 @@ def getLinearSppPath(regions, sequence):
     
     return np.stack(path).T, run_time
 
-def getBezierSppPath(plant, regions, sequence, order, continuity, hdot_min = 1e-3):
+def getBezierGcsPath(plant, regions, sequence, order, continuity, hdot_min = 1e-3):
     run_time = []
     trajectories = []
     for start_pt, goal_pt in zip(sequence[:-1], sequence[1:]):
-        segment_run_time = 0.0
-        spp = BezierSPP(regions, order, continuity)
-        spp.addTimeCost(1)
-        spp.addPathLengthCost(1)
-        spp.addDerivativeRegularization(1e-3, 1e-3, 2)
-        spp.addVelocityLimits(0.6*plant.GetVelocityLowerLimits(), 0.6*plant.GetVelocityUpperLimits())
-        spp.setPaperSolverOptions()
-        spp.setSolver(MosekSolver())
-        spp.setRoundingStrategy(randomForwardPathSearch, max_paths = 10, max_trials = 100, seed = 0)
+        gcs = BezierGCS(regions, order, continuity)
+        gcs.addTimeCost(1)
+        gcs.addPathLengthCost(1)
+        gcs.addDerivativeRegularization(1e-3, 1e-3, 2)
+        gcs.addVelocityLimits(0.6*plant.GetVelocityLowerLimits(), 0.6*plant.GetVelocityUpperLimits())
+        gcs.setPaperSolverOptions()
+        gcs.setSolver(MosekSolver())
+        gcs.setRoundingStrategy([greedyForwardPathSearch, greedyBackwardPathSearch, averageVertexPositionGcs])
         
         start_time = time.time()
-        segment_traj, result, best_result, hard_result, stats = spp.SolvePath(
+        segment_traj, result, best_result, hard_result, stats = gcs.SolvePath(
                 start_pt, goal_pt, True, False, preprocessing=True)
         if segment_traj is None:
             print(f"Failed between {start_pt} and {goal_pt}")
