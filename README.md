@@ -9,13 +9,6 @@ pip install -r requirements.txt
 
 Drake also requires a couple additional libraries.  To install them follow the below instuctions.
 
-For Ubuntu 18.04:
-```
-sudo apt-get update
-sudo apt-get install --no-install-recommends \
-  libpython3.6 libx11-6 libsm6 libxt6 libglib2.0-0
-```
-
 For Ubuntu 20.04:
 ```
 sudo apt-get update
@@ -30,17 +23,11 @@ If you want to compare GCS to sampling based planners (such as PRM), you'll need
 git clone -b gcs git@github.com:mpetersen94/drake.git
 mkdir drake-build
 cd drake-build
-cmake [-DWITH_GUROBI=ON -DWITH_MOSEK=ON -DWITH_ROBOTLOCOMOTION_SNOPT=ON] ../drake
+cmake -DWITH_MOSEK=ON [-DWITH_GUROBI=ON -DWITH_ROBOTLOCOMOTION_SNOPT=ON] ../drake
 make -j
 ```
 
 Then add the built bindings to your Python Path using
-
-For Ubuntu 18.04:
-```
-cd drake-build
-export PYTHONPATH=${PWD}/install/lib/python3.6/site-packages:$PYTHONPATH
-```
 
 For Ubuntu 20.04:
 ```
