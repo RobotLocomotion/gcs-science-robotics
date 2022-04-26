@@ -313,6 +313,7 @@ def getBezierGcsPath(plant, regions, sequence, order, continuity, hdot_min = 1e-
     run_time = []
     trajectories = []
     for start_pt, goal_pt in zip(sequence[:-1], sequence[1:]):
+        segment_run_time=0.0
         gcs = BezierGCS(regions, order, continuity)
         gcs.addTimeCost(1)
         gcs.addPathLengthCost(1)
@@ -320,7 +321,7 @@ def getBezierGcsPath(plant, regions, sequence, order, continuity, hdot_min = 1e-
         gcs.addVelocityLimits(0.6*plant.GetVelocityLowerLimits(), 0.6*plant.GetVelocityUpperLimits())
         gcs.setPaperSolverOptions()
         gcs.setSolver(MosekSolver())
-        gcs.setRoundingStrategy([greedyForwardPathSearch, greedyBackwardPathSearch, averageVertexPositionGcs])
+        gcs.setRoundingStrategy(randomForwardPathSearch, max_paths = 10, max_trials = 100, seed = 0)
         
         start_time = time.time()
         segment_traj, result, best_result, hard_result, stats = gcs.SolvePath(
