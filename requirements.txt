@@ -8,4 +8,5 @@ pandas
 pydot
 scipy
 
-  # IPython jupyter
+# Adds this project to path
+-e .

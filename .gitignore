@@ -9,6 +9,7 @@
 models/room_gen/building.sdf
 
 .ipynb_checkpoints
+*.egg-info/
 *.pyc
 *.tar
 
