@@ -6,9 +6,9 @@ import time
 from pydrake.systems.framework import LeafSystem
 from pydrake.solvers.mosek import MosekSolver
 
-from examples.uav.building_generation import *
 from gcs.bezier import BezierGCS
 from gcs.rounding import *
+from reproduction.uav.building_generation import *
 
 def generate_buildings(save_location, num_buildings):
     start = np.array([-1, -1])
@@ -65,7 +65,7 @@ def plan_through_buildings(save_location, num_buildings, solve_gcs=True, file_ad
             regions = pickle.load(f)
 
         start_setup = time.time()
-        gcs = build_bezier_gcs(regions)
+        gcs = build_bezier_gcs(regions, solver)
         setup_time = time.time() - start_setup
 
         planning_results = dict()

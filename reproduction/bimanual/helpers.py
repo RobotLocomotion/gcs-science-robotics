@@ -1,21 +1,35 @@
 import numpy as np
+import os
 import time
 from copy import copy
 
+from pydrake.common import FindResourceOrThrow
 from pydrake.geometry import (
     CollisionFilterDeclaration,
     GeometrySet,
     Role,
+    SceneGraph
 )
 from pydrake.math import RigidTransform, RollPitchYaw, RotationMatrix
 from pydrake.multibody.inverse_kinematics import InverseKinematics
+from pydrake.multibody.parsing import LoadModelDirectives, Parser, ProcessModelDirectives
+from pydrake.multibody.plant import AddMultibodyPlantSceneGraph, MultibodyPlant
 from pydrake.solvers.mathematicalprogram import Solve
 from pydrake.solvers.mosek import MosekSolver
-from pydrake.systems.framework import LeafSystem
+from pydrake.systems.analysis import Simulator
+from pydrake.systems.framework import DiagramBuilder, LeafSystem
+from pydrake.systems.meshcat_visualizer import ConnectMeshcatVisualizer
+from pydrake.systems.primitives import TrajectorySource
+from pydrake.systems.rendering import MultibodyPositionToGeometryPose
+
+
+import meshcat.geometry as g
 
 from gcs.bezier import BezierGCS
 from gcs.linear import LinearGCS
 from gcs.rounding import *
+from reproduction.prm_comparison.helpers import lower_alpha
+from reproduction.util import *
 
 def getIkSeeds():
     return {
@@ -359,3 +373,141 @@ class VectorTrajectorySource(LeafSystem):
         
         q = self.trajectories[traj_index].value(t - self.start_time[traj_index])
         output.set_value(q)
+
+def visualize_trajectory(traj, vis, zmq_url):
+    builder = DiagramBuilder()
+
+    scene_graph = builder.AddSystem(SceneGraph())
+    plant = MultibodyPlant(time_step=0.0)
+    plant.RegisterAsSourceForSceneGraph(scene_graph)
+    parser = Parser(plant)
+    parser.package_map().Add("gcs", GcsDir())
+
+    directives_file = FindModelFile("models/bimanual_iiwa.yaml")
+    directives = LoadModelDirectives(directives_file)
+    models = ProcessModelDirectives(directives, plant, parser)
+    [iiwa_1, wsg_1, iiwa_2, wsg_2, shelf, binR, binL, table] =  models
+
+    plant.Finalize()
+
+    to_pose = builder.AddSystem(MultibodyPositionToGeometryPose(plant))
+    builder.Connect(to_pose.get_output_port(), scene_graph.get_source_pose_port(plant.get_source_id()))
+
+    if type(traj) is list:
+        traj_system = builder.AddSystem(VectorTrajectorySource(traj))
+        end_time = np.sum([t.end_time() for t in traj])
+    else:
+        traj_system = builder.AddSystem(TrajectorySource(traj))
+        end_time = traj.end_time()
+    builder.Connect(traj_system.get_output_port(), to_pose.get_input_port())
+
+    meshcat = ConnectMeshcatVisualizer(builder, scene_graph, zmq_url=zmq_url)
+
+    vis_diagram = builder.Build()
+    simulator = Simulator(vis_diagram)
+
+    plant_context = plant.CreateDefaultContext()
+    rgb_color = [i/255 for i in (0, 0, 255, 255)]
+    iiwa1_X = []
+    iiwa2_X = []
+    if type(traj) is list:
+        for t in traj:
+            q_waypoints = t.vector_values(np.linspace(t.start_time(), t.end_time(), 1000))
+            for ii in range(q_waypoints.shape[1]):
+                plant.SetPositions(plant_context, q_waypoints[:, ii])
+                iiwa1_X.append(plant.EvalBodyPoseInWorld(
+                    plant_context, plant.GetBodyByName("body", wsg_1.model_instance)))
+                iiwa2_X.append(plant.EvalBodyPoseInWorld(
+                    plant_context, plant.GetBodyByName("body", wsg_2.model_instance)))
+
+        vertices = list(map(lambda X: X.translation(), iiwa1_X))
+        colors = [np.array(rgb_color) for _ in range(len(iiwa1_X))]
+        vertices = np.stack(vertices).astype(np.float32).T
+        colors = np.array(colors).astype(np.float32).T
+        vis["paths"]["iiwa_1"].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
+                                        g.PointsMaterial(size=0.015)))
+        vertices = list(map(lambda X: X.translation(), iiwa2_X))
+        colors = [np.array(rgb_color) for _ in range(len(iiwa2_X))]
+        vertices = np.stack(vertices).astype(np.float32).T
+        colors = np.array(colors).astype(np.float32).T
+        vis["paths"]["iiwa_2"].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
+                                        g.PointsMaterial(size=0.015)))
+
+    meshcat.start_recording()
+    simulator.AdvanceTo(end_time)
+    meshcat.publish_recording()
+
+def generate_segment_pics(traj, segment, vis, zmq_url):
+    builder = DiagramBuilder()
+
+    plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
+    parser = Parser(plant, scene_graph)
+    parser.package_map().Add("gcs", GcsDir())
+    directives_file = FindModelFile("models/bimanual_iiwa.yaml")
+    iiwa_file = FindResourceOrThrow(
+        "drake/manipulation/models/iiwa_description/urdf/iiwa14_spheres_collision.urdf")
+    wsg_file = FindModelFile("models/schunk_wsg_50_welded_fingers.sdf")
+    directives = LoadModelDirectives(directives_file)
+    models = ProcessModelDirectives(directives, plant, parser)
+    [iiwa1_start, wsg1_start, iiwa2_start, wsg2_start, shelf, binR, binL, table] =  models
+
+    iiwa1_goal = parser.AddModelFromFile(iiwa_file, "iiwa1_goal")
+    wsg1_goal = parser.AddModelFromFile(wsg_file, "wsg1_goal")
+    iiwa2_goal = parser.AddModelFromFile(iiwa_file, "iiwa2_goal")
+    wsg2_goal = parser.AddModelFromFile(wsg_file, "wsg2_goal")
+    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base", iiwa1_goal),
+                     RigidTransform())
+    plant.WeldFrames(plant.GetFrameByName("iiwa_link_7", iiwa1_goal),
+                     plant.GetFrameByName("body", wsg1_goal),
+                     RigidTransform(rpy=RollPitchYaw([np.pi/2., 0, np.pi/2]), p=[0, 0, 0.114]))
+    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base", iiwa2_goal),
+                     RigidTransform([0, 0.5, 0]))
+    plant.WeldFrames(plant.GetFrameByName("iiwa_link_7", iiwa2_goal),
+                     plant.GetFrameByName("body", wsg2_goal),
+                     RigidTransform(rpy=RollPitchYaw([np.pi/2., 0, np.pi/2]), p=[0, 0, 0.114]))
+
+    arm_models = [iiwa1_start.model_instance, wsg1_start.model_instance,
+                  iiwa2_start.model_instance, wsg2_start.model_instance,
+                  iiwa1_goal, wsg1_goal, iiwa2_goal, wsg2_goal]
+    lower_alpha(plant, scene_graph.model_inspector(), arm_models, 0.4, scene_graph)
+
+    plant.Finalize()
+
+    meshcat = ConnectMeshcatVisualizer(builder, scene_graph, zmq_url=zmq_url)
+
+    diagram = builder.Build()
+
+    if type(traj) is not list:
+        traj = [traj]
+
+    meshcat.load()
+    context = diagram.CreateDefaultContext()
+    plant_context = plant.GetMyMutableContextFromRoot(context)
+
+    t = traj[segment]
+
+    iiwa1_X = []
+    iiwa2_X = []
+    q_waypoints = t.vector_values(np.linspace(t.start_time(), t.end_time(), 1000))
+    for ii in range(q_waypoints.shape[1]):
+        plant.SetPositions(plant_context, np.concatenate((q_waypoints[:, ii], np.zeros(14))))
+        iiwa1_X.append(plant.EvalBodyPoseInWorld(
+            plant_context, plant.GetBodyByName("body", wsg1_start.model_instance)))
+        iiwa2_X.append(plant.EvalBodyPoseInWorld(
+            plant_context, plant.GetBodyByName("body", wsg2_start.model_instance)))
+
+    vertices = list(map(lambda X: X.translation(), iiwa1_X))
+    colors = [np.array([0, 0, 1]) for _ in range(len(iiwa1_X))]
+    vertices = np.stack(vertices).astype(np.float32).T
+    colors = np.array(colors).astype(np.float32).T
+    vis["paths"]["iiwa_1"].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
+                                      g.PointsMaterial(size=0.015)))
+    vertices = list(map(lambda X: X.translation(), iiwa2_X))
+    colors = [np.array([0, 0, 1]) for _ in range(len(iiwa2_X))]
+    vertices = np.stack(vertices).astype(np.float32).T
+    colors = np.array(colors).astype(np.float32).T
+    vis["paths"]["iiwa_2"].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
+                                      g.PointsMaterial(size=0.015)))
+
+    plant.SetPositions(plant_context, np.concatenate((q_waypoints[:, 0], q_waypoints[:, -1])))
+    diagram.Publish(context)
