@@ -78,19 +78,20 @@ def plan_through_buildings(save_location, num_buildings, solve_gcs=True, file_ad
         start_time = time.time()
         output = gcs.SolvePath(start_pose, goal_pose, solve_gcs, False,
                                zero_deriv_boundary=3, preprocessing=True)
-        b_traj, result, best_result, hard_results, statistics = output
+        b_traj, results_dict = output
         solve_time = time.time() - start_time
 
         print("Solve time for building", ii, ":", solve_time, flush=True)
 
-        planning_results["preprocessing_time"] = statistics["preprocessing"]["linear_programs"]
+        planning_results["preprocessing_time"] = results_dict["preprocessing_stats"]["linear_programs"]
 
         if solve_gcs:
             planning_results["gcs_time"] = solve_time
 
+            result = results_dict["relaxation_result"]
             planning_results["relaxation_result"] = result.get_solution_result()
-            planning_results["relaxation_time"] = result.get_solver_details().optimizer_time
-            planning_results["relaxation_cost"] = result.get_optimal_cost()
+            planning_results["relaxation_time"] = results_dict["relaxation_solver_time"]
+            planning_results["relaxation_cost"] = results_dict["relaxation_cost"]
             planning_results["relaxation_solution"] = []
             for edge in gcs.gcs.Edges():
                 edge_solution = {"name": edge.name(),
@@ -99,9 +100,14 @@ def plan_through_buildings(save_location, num_buildings, solve_gcs=True, file_ad
                                  "phi_e": result.GetSolution(edge.phi())}
                 planning_results["relaxation_solution"].append(edge_solution)
 
+            best_result = results_dict["best_result"]
             if best_result is not None:
                 planning_results["rounded_result"] = best_result.get_solution_result()
-                planning_results["rounded_cost"] = best_result.get_optimal_cost()
+                planning_results["rounded_time"] = results_dict["total_rounded_solver_time"]
+                planning_results["gcs_solver_time"] = (planning_results["relaxation_time"]
+                                                       + planning_results["rounded_time"]
+                                                       + planning_results["preprocessing_time"])
+                planning_results["rounded_cost"] = results_dict["rounded_cost"]
                 planning_results["rounded_solution"] = []
                 for edge in gcs.gcs.Edges():
                     edge_solution = {"name": edge.name(),
@@ -110,13 +116,6 @@ def plan_through_buildings(save_location, num_buildings, solve_gcs=True, file_ad
                                      "phi_e": best_result.GetSolution(edge.phi())}
                     planning_results["rounded_solution"].append(edge_solution)
 
-                rounding_time = 0
-                for result in hard_results:
-                    rounding_time += result.get_solver_details().optimizer_time
-                planning_results["rounded_time"] = rounding_time
-                planning_results["gcs_solver_time"] = (planning_results["relaxation_time"]
-                                                       + planning_results["rounded_time"]
-                                                       + planning_results["preprocessing_time"])
             else:
                 planning_results["rounded_result"] = None
                 planning_results["rounded_time"] = np.nan
@@ -137,11 +136,12 @@ def plan_through_buildings(save_location, num_buildings, solve_gcs=True, file_ad
         else:
             planning_results["mip_time"] = solve_time
 
+            result = results_dict["mip_result"]
             planning_results["mip_result"] = result.get_solution_result()
-            planning_results["mip_solver_time"] = result.get_solver_details().optimizer_time
+            planning_results["mip_solver_time"] = results_dict["mip_solver_time"]
             planning_results["mip_total_solver_time"] = (planning_results["preprocessing_time"]
                                                          + planning_results["mip_solver_time"])
-            planning_results["mip_cost"] = result.get_optimal_cost()
+            planning_results["mip_cost"] = results_dict["mip_cost"]
             planning_results["mip_solution"] = []
             for edge in gcs.gcs.Edges():
                 edge_solution = {"name": edge.name(),

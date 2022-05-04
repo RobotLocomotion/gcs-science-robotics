@@ -306,18 +306,15 @@ def getLinearGcsPath(regions, sequence):
         gcs.setSolver(MosekSolver())
         
         start_time = time.time()
-        waypoints, result, best_result, hard_result, _ = gcs.SolvePath(start_pt, goal_pt, True,
-                                                                    False, preprocessing=True)
+        waypoints, results_dict = gcs.SolvePath(start_pt, goal_pt, True,
+                                                False, preprocessing=True)
         if waypoints is None:
             print(f"Failed between {start_pt} and {goal_pt}")
             return None
         print(f"Planned segment in {np.round(time.time() - start_time, 4)}", flush=True)
-        run_time += result.get_solver_details().optimizer_time
-        max_hard_result_time = 0
-        for result in hard_result:
-            if result.get_solver_details().optimizer_time > max_hard_result_time:
-                max_hard_result_time = result.get_solver_details().optimizer_time
-        run_time += max_hard_result_time
+        run_time += results_dict["preprocessing_stats"]['linear_programs']
+        run_time += results_dict["relaxation_solver_time"]
+        run_time += results_dict["total_rounded_solver_time"]
         
         path += waypoints.T[1:].tolist()
     
@@ -338,22 +335,22 @@ def getBezierGcsPath(plant, regions, sequence, order, continuity, hdot_min = 1e-
         gcs.setRoundingStrategy(randomForwardPathSearch, max_paths = 10, max_trials = 100, seed = 0)
         
         start_time = time.time()
-        segment_traj, result, best_result, hard_result, stats = gcs.SolvePath(
+        segment_traj, results_dict = gcs.SolvePath(
                 start_pt, goal_pt, True, False, preprocessing=True)
         if segment_traj is None:
             print(f"Failed between {start_pt} and {goal_pt}")
             return None
         print(f"Planned segment in {np.round(time.time() - start_time, 4)}", flush=True)
-        segment_run_time += result.get_solver_details().optimizer_time
-        for r in hard_result:
-            segment_run_time += r.get_solver_details().optimizer_time
-        segment_run_time += stats["preprocessing"]['linear_programs']
+        segment_run_time += results_dict["preprocessing_stats"]['linear_programs']
+        segment_run_time += results_dict["relaxation_solver_time"]
+        segment_run_time += results_dict["total_rounded_solver_time"]
         trajectories.append(segment_traj)
         run_time.append(segment_run_time)
-        print("\tRounded cost:", np.round(best_result.get_optimal_cost(), 4),
-              "\tRelaxed cost:", np.round(result.get_optimal_cost(), 4))
+        print("\tRounded cost:", np.round(results_dict["rounded_cost"], 4),
+              "\tRelaxed cost:", np.round(results_dict["relaxation_cost"], 4))
         print("\tCertified Optimality Gap:",
-             (best_result.get_optimal_cost()-result.get_optimal_cost())/result.get_optimal_cost())
+             (results_dict["rounded_cost"]-results_dict["relaxation_cost"])
+                /results_dict["relaxation_cost"])
         
     return trajectories, run_time
 

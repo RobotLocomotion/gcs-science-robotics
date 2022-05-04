@@ -89,28 +89,12 @@ class LinearGCS(BaseGCS):
         if not target_connected:
             raise ValueError('Target vertex is not connected.')
 
-        active_edges, result, hard_result, statistics = self.solveGCS(
+        best_path, best_result, results_dict = self.solveGCS(
             start, goal, rounding, preprocessing, verbose)
 
-        if active_edges is None:
+        if best_path is None:
             self.ResetGraph([start, goal])
-            return None, result, None, hard_result, statistics
-
-        best_cost = np.inf
-        best_path = None
-        best_result = None
-        for path, r in zip(active_edges, hard_result):
-            if path is None or not r.is_success():
-                continue
-            if r.get_optimal_cost() < best_cost:
-                best_cost = r.get_optimal_cost()
-                best_path = path
-                best_result = r
-
-        if verbose:
-            for edge in best_path:
-                print("Added", edge.name(), "to path. Value:",
-                      result.GetSolution(edge.phi()))
+            return None, results_dict
 
         # Extract trajectory
         waypoints = np.empty((self.dimension, 0))
@@ -120,4 +104,4 @@ class LinearGCS(BaseGCS):
                 [waypoints, np.expand_dims(new_waypoint, 1)], axis=1)
 
         self.ResetGraph([start, goal])
-        return waypoints, result, best_result, hard_result, statistics
+        return waypoints, results_dict
