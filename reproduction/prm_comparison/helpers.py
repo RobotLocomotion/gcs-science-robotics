@@ -1,3 +1,7 @@
+import matplotlib.pyplot as plt
+import os
+import numpy as np
+
 from pydrake.systems.framework import DiagramBuilder
 from pydrake.multibody.plant import AddMultibodyPlantSceneGraph, MultibodyPlant
 from pydrake.multibody.parsing import LoadModelDirectives, Parser, ProcessModelDirectives
@@ -15,18 +19,17 @@ from pydrake.multibody import inverse_kinematics
 from pydrake.solvers.mathematicalprogram import Solve
 
 from meshcat import Visualizer
-import matplotlib.pyplot as plt
 import meshcat.geometry as g
-import os
-import numpy as np
+
+from reproduction.util import *
 
 def ForwardKinematics(q_list):
     builder = DiagramBuilder()
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
     parser = Parser(plant)
-    parser.package_map().Add("gcs", os.path.dirname("./package.xml"))
+    parser.package_map().Add("gcs", GcsDir())
 
-    directives_file = "./models/iiwa14_spheres_collision_welded_gripper.yaml"
+    directives_file = FindModelFile("models/iiwa14_spheres_collision_welded_gripper.yaml")
     directives = LoadModelDirectives(directives_file)
     models = ProcessModelDirectives(directives, plant, parser)
     [iiwa, wsg, shelf, binR, binL, table] =  models
@@ -49,9 +52,9 @@ def InverseKinematics(q0, translation, rpy):
     builder = DiagramBuilder()
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
     parser = Parser(plant)
-    parser.package_map().Add("gcs", os.path.dirname("./package.xml"))
+    parser.package_map().Add("gcs", GcsDir())
 
-    directives_file = "./models/iiwa14_spheres_collision_welded_gripper.yaml"
+    directives_file = FindModelFile("models/iiwa14_spheres_collision_welded_gripper.yaml")
     directives = LoadModelDirectives(directives_file)
     models = ProcessModelDirectives(directives, plant, parser)
     [iiwa, wsg, shelf, binR, binL, table] =  models
@@ -171,9 +174,9 @@ def visualize_trajectory(zmq_url, traj_list, show_line = False, iiwa_ghosts = []
     
     
     parser = Parser(plant, scene_graph)
-    parser.package_map().Add("gcs", os.path.dirname("./package.xml"))
+    parser.package_map().Add("gcs", GcsDir())
 
-    directives_file = "./models/iiwa14_spheres_collision_welded_gripper.yaml"
+    directives_file = FindModelFile("models/iiwa14_spheres_collision_welded_gripper.yaml")
     directives = LoadModelDirectives(directives_file)
     models = ProcessModelDirectives(directives, plant, parser)
     [iiwa, wsg, shelf, binR, binL, table] =  models
@@ -183,8 +186,9 @@ def visualize_trajectory(zmq_url, traj_list, show_line = False, iiwa_ghosts = []
         lower_alpha(plant, inspector, [iiwa.model_instance, wsg.model_instance], alpha,scene_graph)
     visual_iiwas = []
     visual_wsgs = []
-    iiwa_file = FindResourceOrThrow("drake/manipulation/models/iiwa_description/urdf/iiwa14_spheres_collision.urdf")
-    wsg_file = "./models/schunk_wsg_50_welded_fingers.sdf"
+    iiwa_file = FindResourceOrThrow(
+        "drake/manipulation/models/iiwa_description/urdf/iiwa14_spheres_collision.urdf")
+    wsg_file = FindModelFile("models/schunk_wsg_50_welded_fingers.sdf")
     
     for i, q in enumerate(iiwa_ghosts):
         new_iiwa = parser.AddModelFromFile(iiwa_file, "vis_iiwa_"+str(i))

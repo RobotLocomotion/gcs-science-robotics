@@ -132,7 +132,7 @@ def compile_sdf(output_file, grid, start, goal, indoor_edges, outdoor_edges, see
         name_item = ET.SubElement(include_item, "name")
         name_item.text = name
         uri_item = ET.SubElement(include_item, "uri")
-        uri_item.text = uri
+        uri_item.text = "package://gcs/" + uri
         static_item = ET.SubElement(include_item, "static")
         static_item.text = "True"
         pose_item = ET.SubElement(include_item, "pose")
