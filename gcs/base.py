@@ -3,6 +3,7 @@ import numpy as np
 
 from pydrake.geometry.optimization import (
     GraphOfConvexSets,
+    Point,
 )
 from pydrake.solvers.mathematicalprogram import (
     CommonSolverOption,
@@ -76,9 +77,45 @@ class BaseGCS:
             assert r.ambient_dimension() == self.dimension
 
         self.gcs = GraphOfConvexSets()
+        self.source = None
+        self.target = None
         self.graph_complete = True
-        self.edge_cost_dict = {}
 
+    def addSourceTarget(self, source, target, edges=None):
+        if self.source is not None or self.target is not None:
+            self.gcs.RemoveVertex(self.source)
+            self.gcs.RemoveVertex(self.target)
+
+        assert len(source) == self.dimension
+        assert len(target) == self.dimension
+
+        vertices = self.gcs.Vertices()
+        # Add edges connecting source and target to graph
+        self.source = self.gcs.AddVertex(Point(source), "source")
+        self.target = self.gcs.AddVertex(Point(target), "target")
+
+        # Add edges connecting source and target to graph
+        if edges is None:
+            edges = self.findStartGoalEdges(source, target)
+
+        if not (len(edges[0]) > 0):
+            raise ValueError('Source vertex is not connected.')
+        if not (len(edges[1]) > 0):
+            raise ValueError('Target vertex is not connected.')
+
+        source_edges = []
+        target_edges = []
+        for ii in edges[0]:
+            u = vertices[ii]
+            edge = self.gcs.AddEdge(self.source, u, f"(source, {u.name()})")
+            source_edges.append(edge)
+
+        for ii in edges[1]:
+            u = vertices[ii]
+            edge = self.gcs.AddEdge(u, self.target, f"({u.name()}, target)")
+            target_edges.append(edge)
+
+        return source_edges, target_edges
 
     def findEdgesViaOverlaps(self):
         edges = []
@@ -138,13 +175,15 @@ class BaseGCS:
             raise ValueError("Rounding strategy must either be "
                              "a function or list of functions.")
 
-    def ResetGraph(self, vertices):
-        for edge in self.gcs.Edges():
-            edge.ClearPhiConstraints()
-            if edge.u() in vertices or edge.v() in vertices:
-                self.edge_cost_dict.pop(edge.id())
+    def ResetGraph(self, vertices=None):
+        if vertices is None:
+            vertices = [self.source, self.target]
+            self.source = None
+            self.target = None
         for v in vertices:
             self.gcs.RemoveVertex(v)
+        for edge in self.gcs.Edges():
+            edge.ClearPhiConstraints()
 
     def VisualizeGraph(self, file_type="svg"):
         graphviz = self.gcs.GetGraphvizString(None, False)
@@ -157,7 +196,7 @@ class BaseGCS:
             raise ValueError("Unrecognized file type:", file_type)
 
 
-    def solveGCS(self, start, goal, rounding, preprocessing, verbose):
+    def solveGCS(self, rounding, preprocessing, verbose):
         if not self.graph_complete:
             raise NotImplementedError(
                 "Replanning on a graph that has undergone preprocessing is "
@@ -165,10 +204,12 @@ class BaseGCS:
 
         results_dict = {}
         if preprocessing:
-            results_dict["preprocessing_stats"] = removeRedundancies(self.gcs, start, goal, verbose=verbose)
+            results_dict["preprocessing_stats"] = removeRedundancies(
+                self.gcs, self.source, self.target, verbose=verbose)
             self.graph_complete = False
 
-        result = self.gcs.SolveShortestPath(start, goal, rounding, self.solver, self.options)
+        result = self.gcs.SolveShortestPath(
+            self.source, self.target, rounding, self.solver, self.options)
 
         if rounding:
             results_dict["relaxation_result"] = result
@@ -195,8 +236,7 @@ class BaseGCS:
             active_edges = []
             found_path = False
             for fn in self.rounding_fn:
-                rounded_edges = fn(self.gcs, result, start, goal,
-                                   edge_cost_dict=self.edge_cost_dict,
+                rounded_edges = fn(self.gcs, result, self.source, self.target,
                                    **self.rounding_kwargs)
                 if rounded_edges is None:
                     print(fn.__name__, "could not find a path.")
@@ -225,7 +265,7 @@ class BaseGCS:
                     else:
                         edge.AddPhiConstraint(False)
                 rounded_results.append(self.gcs.SolveShortestPath(
-                    start, goal, rounding, self.solver, self.options))
+                    self.source, self.target, rounding, self.solver, self.options))
                 solve_time = rounded_results[-1].get_solver_details().optimizer_time
                 max_rounded_solver_time = np.maximum(solve_time, max_rounded_solver_time)
                 total_rounded_solver_time += solve_time
@@ -257,7 +297,7 @@ class BaseGCS:
                 print("Second solve failed on all paths.")
                 return best_path, best_result, results_dict
         else:
-            best_path = MipPathExtraction(self.gcs, result, start, goal)
+            best_path = MipPathExtraction(self.gcs, result, self.source, self.target)
             best_result = result
             results_dict["best_path"] = best_path
             results_dict["best_result"] = best_result

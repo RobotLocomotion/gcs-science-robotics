@@ -66,6 +66,7 @@ def plan_through_buildings(save_location, num_buildings, solve_gcs=True, file_ad
 
         start_setup = time.time()
         gcs = build_bezier_gcs(regions, solver)
+        gcs.addSourceTarget(start_pose, goal_pose, zero_deriv_boundary=3)
         setup_time = time.time() - start_setup
 
         planning_results = dict()
@@ -76,8 +77,7 @@ def plan_through_buildings(save_location, num_buildings, solve_gcs=True, file_ad
         planning_results["setup_time"] = setup_time
 
         start_time = time.time()
-        output = gcs.SolvePath(start_pose, goal_pose, solve_gcs, False,
-                               zero_deriv_boundary=3, preprocessing=True)
+        output = gcs.SolvePath(solve_gcs, False, preprocessing=True)
         b_traj, results_dict = output
         solve_time = time.time() - start_time
 

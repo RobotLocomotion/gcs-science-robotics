@@ -109,7 +109,6 @@ class BezierGCS(BaseGCS):
             u = vertices[ii]
             v = vertices[jj]
             edge = self.gcs.AddEdge(u, v, f"({u.name()}, {v.name()})")
-            self.edge_cost_dict[edge.id()] = []
 
             for c_con in self.contin_constraints:
                 edge.AddConstraint(Binding[Constraint](
@@ -125,8 +124,7 @@ class BezierGCS(BaseGCS):
         self.edge_costs.append(time_cost)
 
         for edge in self.gcs.Edges():
-            self.edge_cost_dict[edge.id()].append(
-                edge.AddCost(Binding[Cost](time_cost, edge.xu()))[1])
+            edge.AddCost(Binding[Cost](time_cost, edge.xu()))
 
     def addPathLengthCost(self, weight):
         assert isinstance(weight, float) or isinstance(weight, int)
@@ -138,8 +136,7 @@ class BezierGCS(BaseGCS):
             self.edge_costs.append(path_cost)
 
             for edge in self.gcs.Edges():
-                self.edge_cost_dict[edge.id()].append(
-                    edge.AddCost(Binding[Cost](path_cost, edge.xu()))[1])
+                edge.AddCost(Binding[Cost](path_cost, edge.xu()))
 
     def addPathLengthIntegralCost(self, weight, integration_points=100):
         assert isinstance(weight, float) or isinstance(weight, int)
@@ -158,8 +155,7 @@ class BezierGCS(BaseGCS):
                 self.edge_costs.append(integral_cost)
 
                 for edge in self.gcs.Edges():
-                    self.edge_cost_dict[edge.id()].append(
-                        edge.AddCost(Binding[Cost](integral_cost, edge.xu()))[1])
+                    edge.AddCost(Binding[Cost](integral_cost, edge.xu()))
         else:
             q_ds = u_path_deriv.vector_values(s_points)
             for ii in range(integration_points + 1):
@@ -174,8 +170,7 @@ class BezierGCS(BaseGCS):
                 self.edge_costs.append(integral_cost)
 
                 for edge in self.gcs.Edges():
-                    self.edge_cost_dict[edge.id()].append(
-                        edge.AddCost(Binding[Cost](integral_cost, edge.xu()))[1])
+                    edge.AddCost(Binding[Cost](integral_cost, edge.xu()))
 
     def addPathEnergyCost(self, weight):
         assert isinstance(weight, float) or isinstance(weight, int)
@@ -190,8 +185,7 @@ class BezierGCS(BaseGCS):
             self.edge_costs.append(energy_cost)
 
             for edge in self.gcs.Edges():
-                self.edge_cost_dict[edge.id()].append(
-                    edge.AddCost(Binding[Cost](energy_cost, edge.xu()))[1])
+                edge.AddCost(Binding[Cost](energy_cost, edge.xu()))
 
     def addDerivativeRegularization(self, weight_r, weight_h, order):
 
@@ -210,8 +204,7 @@ class BezierGCS(BaseGCS):
                 self.edge_costs.append(reg_cost)
 
                 for edge in self.gcs.Edges():
-                    self.edge_cost_dict[edge.id()].append(
-                        edge.AddCost(Binding[Cost](reg_cost, edge.xu()))[1])
+                    edge.AddCost(Binding[Cost](reg_cost, edge.xu()))
 
     def addVelocityLimits(self, lower_bound, upper_bound):
         assert len(lower_bound) == self.dimension
@@ -233,11 +226,8 @@ class BezierGCS(BaseGCS):
             for edge in self.gcs.Edges():
                 edge.AddConstraint(Binding[Constraint](velocity_con, edge.xu()))
 
-
-    def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, velocity=None,
-                  zero_deriv_boundary=None, preprocessing=False):
-        assert len(source) == self.dimension
-        assert len(target) == self.dimension
+    def addSourceTarget(self, source, target, edges=None, velocity=None, zero_deriv_boundary=None):
+        source_edges, target_edges =  super().addSourceTarget(source, target, edges)
 
         if velocity is not None:
             assert velocity.shape == (2, self.dimension)
@@ -267,63 +257,41 @@ class BezierGCS(BaseGCS):
                     DecomposeLinearExpressions(np.squeeze(u_path_control[-1]), self.u_vars),
                     np.zeros(self.dimension)))
 
-        vertices = self.gcs.Vertices()
-        # Add edges connecting source and target to graph
-        start = self.gcs.AddVertex(Point(source), "start")
-        goal = self.gcs.AddVertex(Point(target), "goal")
-
-        # Add edges connecting source and target to graph
-        if edges is None:
-            edges = self.findStartGoalEdges(source, target)
-        source_connected = (len(edges[0]) > 0)
-        target_connected = (len(edges[1]) > 0)
-
-        for ii in edges[0]:
-            u = vertices[ii]
-            edge = self.gcs.AddEdge(start, u, f"(start, {u.name()})")
-            self.edge_cost_dict[edge.id()] = []
-
+        for edge in source_edges:
             for jj in range(self.dimension):
-                edge.AddConstraint(start.x()[jj] == u.x()[jj])
+                edge.AddConstraint(edge.xu()[jj] == edge.xv()[jj])
+
             if velocity is not None:
-                edge.AddConstraint(Binding[Constraint](initial_velocity_con, u.x()))
+                edge.AddConstraint(Binding[Constraint](initial_velocity_con, edge.xv()))
             if zero_deriv_boundary is not None:
                 for i_con in initial_constraints:
-                    edge.AddConstraint(Binding[Constraint](i_con, u.x()))
+                    edge.AddConstraint(Binding[Constraint](i_con, edge.xv()))
 
-            edge.AddConstraint(u.x()[-(self.order + 1)] == 0.)
+            edge.AddConstraint(edge.xv()[-(self.order + 1)] == 0.)
 
-        for ii in edges[1]:
-            u = vertices[ii]
-            edge = self.gcs.AddEdge(u, goal, f"({u.name()}, goal)")
-            self.edge_cost_dict[edge.id()] = []
-
+        for edge in target_edges:    
             for jj in range(self.dimension):
                 edge.AddConstraint(
-                    u.x()[-(self.dimension + self.order + 1) + jj] == goal.x()[jj])
+                    edge.xu()[-(self.dimension + self.order + 1) + jj] == edge.xv()[jj])
+
             if velocity is not None:
-                edge.AddConstraint(Binding[Constraint](final_velocity_con, u.x()))
+                edge.AddConstraint(Binding[Constraint](final_velocity_con, edge.xu()))
             if zero_deriv_boundary is not None:
                 for f_con in final_constraints:
-                    edge.AddConstraint(Binding[Constraint](f_con, u.x()))
+                    edge.AddConstraint(Binding[Constraint](f_con, edge.xu()))
 
             for cost in self.edge_costs:
-                self.edge_cost_dict[edge.id()].append(
-                    edge.AddCost(Binding[Cost](cost, u.x()))[1])
+                edge.AddCost(Binding[Cost](cost, edge.xu()))
 
             for d_con in self.deriv_constraints:
-                edge.AddConstraint(Binding[Constraint](d_con, u.x()))
+                edge.AddConstraint(Binding[Constraint](d_con, edge.xu()))
 
-        if not source_connected:
-            raise ValueError('Source vertex is not connected.')
-        if not target_connected:
-            raise ValueError('Target vertex is not connected.')
 
+    def SolvePath(self, rounding=False, verbose=False, preprocessing=False):
         best_path, best_result, results_dict = self.solveGCS(
-            start, goal, rounding, preprocessing, verbose)
+            rounding, preprocessing, verbose)
 
         if best_path is None:
-            self.ResetGraph([start, goal])
             return None, results_dict
 
         # Extract trajectory control points
@@ -331,7 +299,7 @@ class BezierGCS(BaseGCS):
         path_control_points = []
         time_control_points = []
         for edge in best_path:
-            if edge.v() == goal:
+            if edge.v() == self.target:
                 knots = np.concatenate((knots, [knots[-1]]))
                 path_control_points.append(best_result.GetSolution(edge.xv()))
                 time_control_points.append(np.array([best_result.GetSolution(edge.xu())[-1]]))
@@ -352,7 +320,6 @@ class BezierGCS(BaseGCS):
         path = BsplineTrajectory(BsplineBasis(self.order + 1, knots), path_control_points)
         time_traj = BsplineTrajectory(BsplineBasis(self.order + 1, knots), time_control_points)
 
-        self.ResetGraph([start, goal])
         return BezierTrajectory(path, time_traj), results_dict
 
 class BezierTrajectory:

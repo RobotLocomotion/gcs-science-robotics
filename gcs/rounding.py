@@ -124,7 +124,7 @@ def randomBackwardPathSearch(gcs, result, source, target, max_paths=10, max_tria
 def MipPathExtraction(gcs, result, source, target, **kwargs):
     return greedyForwardPathSearch(gcs, result, source, target)
 
-def averageVertexPositionGcs(gcs, result, source, target, edge_cost_dict=None, flow_min=1e-3, **kwargs):
+def averageVertexPositionGcs(gcs, result, source, target, flow_min=1e-3, **kwargs):
 
     G = nx.DiGraph()
     G.add_nodes_from(gcs.Vertices())
@@ -149,7 +149,7 @@ def averageVertexPositionGcs(gcs, result, source, target, edge_cost_dict=None, f
     for e in gcs.Edges():
         G.add_edge(e.u(), e.v())
         e_cost = 0
-        for cost in edge_cost_dict[e.id()]:
+        for cost in e.GetCosts():
             if len(cost.variables()) == e.u().set().ambient_dimension():
                 e_cost += cost.evaluator().Eval(vertex_data[e.u().id()])
             elif len(cost.variables()) == e.u().set().ambient_dimension() + e.v().set().ambient_dimension():
