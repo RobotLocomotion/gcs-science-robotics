@@ -302,12 +302,12 @@ def getLinearGcsPath(regions, sequence):
     run_time = 0.0
     for start_pt, goal_pt in zip(sequence[:-1], sequence[1:]):
         gcs = LinearGCS(regions)
+        gcs.addSourceTarget(start_pt, goal_pt)
         gcs.setPaperSolverOptions()
         gcs.setSolver(MosekSolver())
         
         start_time = time.time()
-        waypoints, results_dict = gcs.SolvePath(start_pt, goal_pt, True,
-                                                False, preprocessing=True)
+        waypoints, results_dict = gcs.SolvePath(True, False, preprocessing=True)
         if waypoints is None:
             print(f"Failed between {start_pt} and {goal_pt}")
             return None
@@ -330,13 +330,13 @@ def getBezierGcsPath(plant, regions, sequence, order, continuity, hdot_min = 1e-
         gcs.addPathLengthCost(1)
         gcs.addDerivativeRegularization(1e-3, 1e-3, 2)
         gcs.addVelocityLimits(0.6*plant.GetVelocityLowerLimits(), 0.6*plant.GetVelocityUpperLimits())
+        gcs.addSourceTarget(start_pt, goal_pt)
         gcs.setPaperSolverOptions()
         gcs.setSolver(MosekSolver())
         gcs.setRoundingStrategy(randomForwardPathSearch, max_paths = 10, max_trials = 100, seed = 0)
         
         start_time = time.time()
-        segment_traj, results_dict = gcs.SolvePath(
-                start_pt, goal_pt, True, False, preprocessing=True)
+        segment_traj, results_dict = gcs.SolvePath(True, False, preprocessing=True)
         if segment_traj is None:
             print(f"Failed between {start_pt} and {goal_pt}")
             return None

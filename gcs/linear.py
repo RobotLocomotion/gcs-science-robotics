@@ -52,45 +52,23 @@ class LinearGCS(BaseGCS):
                                  u.set().b()),
                 v.x()))
 
-    def SolvePath(self, source, target, rounding=False, verbose=False, edges=None, preprocessing=False):
-        assert len(source) == self.dimension
-        assert len(target) == self.dimension
+    def addSourceTarget(self, source, target, edges=None):
+        source_edges, target_edges = super().addSourceTarget(source, target, edges)
 
-        # Add source and target vertices
-        vertices = self.gcs.Vertices()
-        start = self.gcs.AddVertex(Point(source), "start")
-        goal = self.gcs.AddVertex(Point(target), "goal")
-
-        # Add edges connecting source and target to graph
-        if edges is None:
-            edges = self.findStartGoalEdges(source, target)
-        source_connected = (len(edges[0]) > 0)
-        target_connected = (len(edges[1]) > 0)
-
-        for ii in edges[0]:
-            u = vertices[ii]
-            edge = self.gcs.AddEdge(start, u, f"(start, {u.name()})")
-
+        for edge in source_edges:
             for jj in range(self.dimension):
-                edge.AddConstraint(start.x()[jj] == u.x()[jj])
+                edge.AddConstraint(edge.xu()[jj] == edge.xv()[jj])
 
-        for ii in edges[1]:
-            u = vertices[ii]
-            edge = self.gcs.AddEdge(u, goal, f"({u.name()}, goal)")
+        for edge in target_edges:
+            edge.AddCost(Binding[Cost](
+                self.edge_cost, np.append(edge.xu(), edge.xv())))
 
-            edge_length = edge.AddCost(Binding[Cost](
-                self.edge_cost, np.append(u.x(), goal.x())))[1]
 
-        if not source_connected:
-            raise ValueError('Source vertex is not connected.')
-        if not target_connected:
-            raise ValueError('Target vertex is not connected.')
-
+    def SolvePath(self, rounding=False, verbose=False, preprocessing=False):
         best_path, best_result, results_dict = self.solveGCS(
-            start, goal, rounding, preprocessing, verbose)
+            rounding, preprocessing, verbose)
 
         if best_path is None:
-            self.ResetGraph([start, goal])
             return None, results_dict
 
         # Extract trajectory
@@ -100,5 +78,4 @@ class LinearGCS(BaseGCS):
             waypoints = np.concatenate(
                 [waypoints, np.expand_dims(new_waypoint, 1)], axis=1)
 
-        self.ResetGraph([start, goal])
         return waypoints, results_dict
