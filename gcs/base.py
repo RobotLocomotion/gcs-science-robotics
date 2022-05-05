@@ -77,7 +77,6 @@ class BaseGCS:
 
         self.gcs = GraphOfConvexSets()
         self.graph_complete = True
-        self.edge_cost_dict = {}
 
 
     def findEdgesViaOverlaps(self):
@@ -139,12 +138,10 @@ class BaseGCS:
                              "a function or list of functions.")
 
     def ResetGraph(self, vertices):
-        for edge in self.gcs.Edges():
-            edge.ClearPhiConstraints()
-            if edge.u() in vertices or edge.v() in vertices:
-                self.edge_cost_dict.pop(edge.id())
         for v in vertices:
             self.gcs.RemoveVertex(v)
+        for edge in self.gcs.Edges():
+            edge.ClearPhiConstraints()
 
     def VisualizeGraph(self, file_type="svg"):
         graphviz = self.gcs.GetGraphvizString(None, False)
@@ -196,7 +193,6 @@ class BaseGCS:
             found_path = False
             for fn in self.rounding_fn:
                 rounded_edges = fn(self.gcs, result, start, goal,
-                                   edge_cost_dict=self.edge_cost_dict,
                                    **self.rounding_kwargs)
                 if rounded_edges is None:
                     print(fn.__name__, "could not find a path.")
