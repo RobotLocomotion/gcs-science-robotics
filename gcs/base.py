@@ -297,7 +297,7 @@ class BaseGCS:
                 print("Second solve failed on all paths.")
                 return best_path, best_result, results_dict
         else:
-            best_path = MipPathExtraction(self.gcs, result, self.source, self.target)
+            best_path = MipPathExtraction(self.gcs, result, self.source, self.target)[0]
             best_result = result
             results_dict["best_path"] = best_path
             results_dict["best_result"] = best_result
