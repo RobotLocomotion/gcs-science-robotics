@@ -124,6 +124,8 @@ class BezierGCS(BaseGCS):
         self.edge_costs.append(time_cost)
 
         for edge in self.gcs.Edges():
+            if edge.u() == self.source:
+                continue
             edge.AddCost(Binding[Cost](time_cost, edge.xu()))
 
     def addPathLengthCost(self, weight):
@@ -136,6 +138,8 @@ class BezierGCS(BaseGCS):
             self.edge_costs.append(path_cost)
 
             for edge in self.gcs.Edges():
+                if edge.u() == self.source:
+                    continue
                 edge.AddCost(Binding[Cost](path_cost, edge.xu()))
 
     def addPathLengthIntegralCost(self, weight, integration_points=100):
@@ -155,6 +159,8 @@ class BezierGCS(BaseGCS):
                 self.edge_costs.append(integral_cost)
 
                 for edge in self.gcs.Edges():
+                    if edge.u() == self.source:
+                        continue
                     edge.AddCost(Binding[Cost](integral_cost, edge.xu()))
         else:
             q_ds = u_path_deriv.vector_values(s_points)
@@ -170,6 +176,8 @@ class BezierGCS(BaseGCS):
                 self.edge_costs.append(integral_cost)
 
                 for edge in self.gcs.Edges():
+                    if edge.u() == self.source:
+                        continue
                     edge.AddCost(Binding[Cost](integral_cost, edge.xu()))
 
     def addPathEnergyCost(self, weight):
@@ -185,6 +193,8 @@ class BezierGCS(BaseGCS):
             self.edge_costs.append(energy_cost)
 
             for edge in self.gcs.Edges():
+                if edge.u() == self.source:
+                    continue
                 edge.AddCost(Binding[Cost](energy_cost, edge.xu()))
 
     def addDerivativeRegularization(self, weight_r, weight_h, order):
@@ -204,6 +214,8 @@ class BezierGCS(BaseGCS):
                 self.edge_costs.append(reg_cost)
 
                 for edge in self.gcs.Edges():
+                    if edge.u() == self.source:
+                        continue
                     edge.AddCost(Binding[Cost](reg_cost, edge.xu()))
 
     def addVelocityLimits(self, lower_bound, upper_bound):
@@ -224,6 +236,8 @@ class BezierGCS(BaseGCS):
             self.deriv_constraints.append(velocity_con)
 
             for edge in self.gcs.Edges():
+                if edge.u() == self.source:
+                    continue
                 edge.AddConstraint(Binding[Constraint](velocity_con, edge.xu()))
 
     def addSourceTarget(self, source, target, edges=None, velocity=None, zero_deriv_boundary=None):
