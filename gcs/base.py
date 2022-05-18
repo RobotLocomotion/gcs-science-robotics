@@ -79,7 +79,6 @@ class BaseGCS:
         self.gcs = GraphOfConvexSets()
         self.source = None
         self.target = None
-        self.graph_complete = True
 
     def addSourceTarget(self, source, target, edges=None):
         if self.source is not None or self.target is not None:
@@ -197,16 +196,11 @@ class BaseGCS:
 
 
     def solveGCS(self, rounding, preprocessing, verbose):
-        if not self.graph_complete:
-            raise NotImplementedError(
-                "Replanning on a graph that has undergone preprocessing is "
-                "not supported yet. Please construct a new planner.")
 
         results_dict = {}
         if preprocessing:
             results_dict["preprocessing_stats"] = removeRedundancies(
                 self.gcs, self.source, self.target, verbose=verbose)
-            self.graph_complete = False
 
         result = self.gcs.SolveShortestPath(
             self.source, self.target, rounding, self.solver, self.options)

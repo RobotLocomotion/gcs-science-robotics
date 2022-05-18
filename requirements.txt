@@ -1,4 +1,4 @@
-drake==1.2
+drake==1.3
 lxml
 matplotlib
 networkx

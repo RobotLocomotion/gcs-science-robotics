@@ -8,7 +8,6 @@ def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
     preprocessing_times = {'total': time(), 'linear_programs': 0}
 
     if verbose:
-        print('Vertices before preprocessing:', len(gcs.Vertices()))
         print('Edges before preprocessing:', len(gcs.Edges()))
 
     # Edges incident with each vertex.
@@ -20,20 +19,7 @@ def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
     for k in inedges_w(s) + outedges_w(t):
         removal_edges.append(gcs.Edges()[k])
     for e in removal_edges:
-        gcs.RemoveEdge(e)
-
-    # Eliminate vertices that do not have incident edges.
-    # This ensures that the conservations of flow are well defined.
-    def removeIsolatedVertices():
-        isolated = lambda w: len(inedges_w(w)) == 0 and len(outedges_w(w)) == 0
-        isolated_vertices = [w for w in gcs.Vertices() if isolated(w)]
-        if s in isolated_vertices:
-            raise ValueError('Source vertex is isolated.')
-        if t in isolated_vertices:
-            raise ValueError('Target vertex is isolated.')
-        for w in isolated_vertices:
-            gcs.RemoveVertex(w)
-    removeIsolatedVertices()
+        e.AddPhiConstraint(False)
 
     # Flow from s to u.
     nE = len(gcs.Edges())
@@ -119,15 +105,13 @@ def removeRedundancies(gcs, s, t, tol=1e-4, verbose=False):
             conservation_g[j].set_bounds([0], [0])
         degree[j].set_bounds([0], [1])
 
-    # Remove redundant edges and isolated vertices.
+    # Turn off redundant edges
     for e in redundant_edges:
-        gcs.RemoveEdge(e)
-    removeIsolatedVertices()
+        e.AddPhiConstraint(False)
 
     preprocessing_times['total'] = time() - preprocessing_times['total']
     if verbose:
-        print('Vertices after preprocessing:', len(gcs.Vertices()))
-        print('Edges after preprocessing:', len(gcs.Edges()))
+        print('Edges after preprocessing:', len(gcs.Edges()) - len(redundant_edges) - len(removal_edges))
         print('Total time for preprocessing:', preprocessing_times['total'])
         print('Time spent solving linear programs:', preprocessing_times['linear_programs'])
 

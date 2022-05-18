@@ -300,11 +300,11 @@ def visualizeConfig(diagram, plant, context, q):
 def getLinearGcsPath(regions, sequence):
     path = [sequence[0]]
     run_time = 0.0
+    gcs = LinearGCS(regions)
+    gcs.setPaperSolverOptions()
+    gcs.setSolver(MosekSolver())
     for start_pt, goal_pt in zip(sequence[:-1], sequence[1:]):
-        gcs = LinearGCS(regions)
         gcs.addSourceTarget(start_pt, goal_pt)
-        gcs.setPaperSolverOptions()
-        gcs.setSolver(MosekSolver())
         
         start_time = time.time()
         waypoints, results_dict = gcs.SolvePath(True, False, preprocessing=True)
@@ -317,23 +317,25 @@ def getLinearGcsPath(regions, sequence):
         run_time += results_dict["total_rounded_solver_time"]
         
         path += waypoints.T[1:].tolist()
+
+        gcs.ResetGraph()
     
     return np.stack(path).T, run_time
 
 def getBezierGcsPath(plant, regions, sequence, order, continuity, hdot_min = 1e-3):
     run_time = []
     trajectories = []
+    gcs = BezierGCS(regions, order, continuity)
+    gcs.addTimeCost(1)
+    gcs.addPathLengthCost(1)
+    gcs.addDerivativeRegularization(1e-3, 1e-3, 2)
+    gcs.addVelocityLimits(0.6*plant.GetVelocityLowerLimits(), 0.6*plant.GetVelocityUpperLimits())
+    gcs.setPaperSolverOptions()
+    gcs.setSolver(MosekSolver())
+    gcs.setRoundingStrategy(randomForwardPathSearch, max_paths = 10, max_trials = 100, seed = 0)
     for start_pt, goal_pt in zip(sequence[:-1], sequence[1:]):
         segment_run_time=0.0
-        gcs = BezierGCS(regions, order, continuity)
-        gcs.addTimeCost(1)
-        gcs.addPathLengthCost(1)
-        gcs.addDerivativeRegularization(1e-3, 1e-3, 2)
-        gcs.addVelocityLimits(0.6*plant.GetVelocityLowerLimits(), 0.6*plant.GetVelocityUpperLimits())
         gcs.addSourceTarget(start_pt, goal_pt)
-        gcs.setPaperSolverOptions()
-        gcs.setSolver(MosekSolver())
-        gcs.setRoundingStrategy(randomForwardPathSearch, max_paths = 10, max_trials = 100, seed = 0)
         
         start_time = time.time()
         segment_traj, results_dict = gcs.SolvePath(True, False, preprocessing=True)
@@ -351,6 +353,8 @@ def getBezierGcsPath(plant, regions, sequence, order, continuity, hdot_min = 1e-
         print("\tCertified Optimality Gap:",
              (results_dict["rounded_cost"]-results_dict["relaxation_cost"])
                 /results_dict["relaxation_cost"])
+
+        gcs.ResetGraph()
         
     return trajectories, run_time
 
