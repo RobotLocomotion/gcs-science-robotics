@@ -7,6 +7,8 @@ from pydrake.common import FindResourceOrThrow
 from pydrake.geometry import (
     CollisionFilterDeclaration,
     GeometrySet,
+    MeshcatVisualizerCpp,
+    Rgba,
     Role,
     SceneGraph
 )
@@ -14,16 +16,13 @@ from pydrake.math import RigidTransform, RollPitchYaw, RotationMatrix
 from pydrake.multibody.inverse_kinematics import InverseKinematics
 from pydrake.multibody.parsing import LoadModelDirectives, Parser, ProcessModelDirectives
 from pydrake.multibody.plant import AddMultibodyPlantSceneGraph, MultibodyPlant
+from pydrake.perception import PointCloud
 from pydrake.solvers.mathematicalprogram import Solve
 from pydrake.solvers.mosek import MosekSolver
 from pydrake.systems.analysis import Simulator
 from pydrake.systems.framework import DiagramBuilder, LeafSystem
-from pydrake.systems.meshcat_visualizer import ConnectMeshcatVisualizer
 from pydrake.systems.primitives import TrajectorySource
 from pydrake.systems.rendering import MultibodyPositionToGeometryPose
-
-
-import meshcat.geometry as g
 
 from gcs.bezier import BezierGCS
 from gcs.linear import LinearGCS
@@ -375,7 +374,7 @@ class VectorTrajectorySource(LeafSystem):
         q = self.trajectories[traj_index].value(t - self.start_time[traj_index])
         output.set_value(q)
 
-def visualize_trajectory(traj, vis, zmq_url):
+def visualize_trajectory(traj, meshcat):
     builder = DiagramBuilder()
 
     scene_graph = builder.AddSystem(SceneGraph())
@@ -402,7 +401,8 @@ def visualize_trajectory(traj, vis, zmq_url):
         end_time = traj.end_time()
     builder.Connect(traj_system.get_output_port(), to_pose.get_input_port())
 
-    meshcat = ConnectMeshcatVisualizer(builder, scene_graph, zmq_url=zmq_url)
+    meshcat_cpp = MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
+    meshcat.Delete()
 
     vis_diagram = builder.Build()
     simulator = Simulator(vis_diagram)
@@ -421,24 +421,22 @@ def visualize_trajectory(traj, vis, zmq_url):
                 iiwa2_X.append(plant.EvalBodyPoseInWorld(
                     plant_context, plant.GetBodyByName("body", wsg_2.model_instance)))
 
-        vertices = list(map(lambda X: X.translation(), iiwa1_X))
-        colors = [np.array(rgb_color) for _ in range(len(iiwa1_X))]
-        vertices = np.stack(vertices).astype(np.float32).T
-        colors = np.array(colors).astype(np.float32).T
-        vis["paths"]["iiwa_1"].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
-                                        g.PointsMaterial(size=0.015)))
-        vertices = list(map(lambda X: X.translation(), iiwa2_X))
-        colors = [np.array(rgb_color) for _ in range(len(iiwa2_X))]
-        vertices = np.stack(vertices).astype(np.float32).T
-        colors = np.array(colors).astype(np.float32).T
-        vis["paths"]["iiwa_2"].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
-                                        g.PointsMaterial(size=0.015)))
+        iiwa1_pointcloud = PointCloud(len(iiwa1_X))
+        iiwa1_pointcloud.mutable_xyzs()[:] = np.array(
+                list(map(lambda X: X.translation(), iiwa1_X))).T[:]
+        meshcat.SetObject("paths/iiwa_1", iiwa1_pointcloud, 0.015,
+                            rgba=Rgba(*rgb_color))
+        iiwa2_pointcloud = PointCloud(len(iiwa2_X))
+        iiwa2_pointcloud.mutable_xyzs()[:] = np.array(
+                list(map(lambda X: X.translation(), iiwa2_X))).T[:]
+        meshcat.SetObject("paths/iiwa_2", iiwa2_pointcloud, 0.015,
+                            rgba=Rgba(*rgb_color))
 
-    meshcat.start_recording()
+    meshcat_cpp.StartRecording()
     simulator.AdvanceTo(end_time)
-    meshcat.publish_recording()
+    meshcat_cpp.PublishRecording()
 
-def generate_segment_pics(traj, segment, vis, zmq_url):
+def generate_segment_pics(traj, segment, meshcat):
     builder = DiagramBuilder()
 
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
@@ -474,14 +472,14 @@ def generate_segment_pics(traj, segment, vis, zmq_url):
 
     plant.Finalize()
 
-    meshcat = ConnectMeshcatVisualizer(builder, scene_graph, zmq_url=zmq_url)
+    meshcat_cpp = MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
+    meshcat.Delete()
 
     diagram = builder.Build()
 
     if type(traj) is not list:
         traj = [traj]
 
-    meshcat.load()
     context = diagram.CreateDefaultContext()
     plant_context = plant.GetMyMutableContextFromRoot(context)
 
@@ -497,18 +495,16 @@ def generate_segment_pics(traj, segment, vis, zmq_url):
         iiwa2_X.append(plant.EvalBodyPoseInWorld(
             plant_context, plant.GetBodyByName("body", wsg2_start.model_instance)))
 
-    vertices = list(map(lambda X: X.translation(), iiwa1_X))
-    colors = [np.array([0, 0, 1]) for _ in range(len(iiwa1_X))]
-    vertices = np.stack(vertices).astype(np.float32).T
-    colors = np.array(colors).astype(np.float32).T
-    vis["paths"]["iiwa_1"].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
-                                      g.PointsMaterial(size=0.015)))
-    vertices = list(map(lambda X: X.translation(), iiwa2_X))
-    colors = [np.array([0, 0, 1]) for _ in range(len(iiwa2_X))]
-    vertices = np.stack(vertices).astype(np.float32).T
-    colors = np.array(colors).astype(np.float32).T
-    vis["paths"]["iiwa_2"].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
-                                      g.PointsMaterial(size=0.015)))
+        iiwa1_pointcloud = PointCloud(len(iiwa1_X))
+        iiwa1_pointcloud.mutable_xyzs()[:] = np.array(
+                list(map(lambda X: X.translation(), iiwa1_X))).T[:]
+        meshcat.SetObject("paths/iiwa_1", iiwa1_pointcloud, 0.015,
+                            rgba=Rgba(0, 0, 1, 1))
+        iiwa2_pointcloud = PointCloud(len(iiwa2_X))
+        iiwa2_pointcloud.mutable_xyzs()[:] = np.array(
+                list(map(lambda X: X.translation(), iiwa2_X))).T[:]
+        meshcat.SetObject("paths/iiwa_2", iiwa2_pointcloud, 0.015,
+                            rgba=Rgba(0, 0, 1, 1))
 
     plant.SetPositions(plant_context, np.concatenate((q_waypoints[:, 0], q_waypoints[:, -1])))
     diagram.Publish(context)

@@ -6,20 +6,24 @@ from pydrake.systems.framework import DiagramBuilder
 from pydrake.multibody.plant import AddMultibodyPlantSceneGraph, MultibodyPlant
 from pydrake.multibody.parsing import LoadModelDirectives, Parser, ProcessModelDirectives
 from pydrake.common import FindResourceOrThrow
-from pydrake.geometry import RoleAssign, Role
+from pydrake.geometry import (
+    IllustrationProperties,
+    MeshcatVisualizerCpp,
+    MeshcatVisualizerParams,
+    Rgba,
+    RoleAssign,
+    Role,
+    SceneGraph
+)
 from pydrake.math import RigidTransform, RollPitchYaw, RotationMatrix
+from pydrake.perception import PointCloud
 from pydrake.all import MultibodyPositionToGeometryPose
 from pydrake.systems.primitives import TrajectorySource, Multiplexer, ConstantVectorSource
-from pydrake.geometry import SceneGraph, IllustrationProperties
 from pydrake.multibody.tree import RevoluteJoint
 from pydrake.trajectories import PiecewisePolynomial
-from pydrake.systems.meshcat_visualizer import ConnectMeshcatVisualizer
 from pydrake.systems.analysis import Simulator
 from pydrake.multibody import inverse_kinematics
 from pydrake.solvers.mathematicalprogram import Solve
-
-from meshcat import Visualizer
-import meshcat.geometry as g
 
 from reproduction.util import *
 
@@ -158,13 +162,11 @@ def is_traj_confined(trajectory, regions):
 
     return len(not_contained_knots)/len(knots)
 
-def visualize_trajectory(zmq_url, traj_list, show_line = False, iiwa_ghosts = [], alpha = 0.5, regions = []):
+def visualize_trajectory(meshcat, traj_list, show_line = False, iiwa_ghosts = [], alpha = 0.5, regions = []):
     if not isinstance(traj_list, list):
         traj_list = [traj_list]
     
     combined_traj = combine_trajectory(traj_list)
-    vis = Visualizer(zmq_url=zmq_url)
-    vis.delete()
 
     builder = DiagramBuilder()
     scene_graph = builder.AddSystem(SceneGraph())
@@ -224,10 +226,12 @@ def visualize_trajectory(zmq_url, traj_list, show_line = False, iiwa_ghosts = []
     builder.Connect(mux.get_output_port(), to_pose.get_input_port())
 
 
-    viz_role = Role.kIllustration
-    # viz_role = Role.kProximity
-    visualizer = ConnectMeshcatVisualizer(builder, scene_graph, zmq_url=zmq_url,
-                                      delete_prefix_on_load=False, role=viz_role)
+    meshcat_params = MeshcatVisualizerParams()
+    meshcat_params.delete_on_initialization_event = False
+    meshcat_params.role = Role.kIllustration
+    # meshcat_params.role = Role.kProximity
+    meshcat_cpp = MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat, meshcat_params)
+    meshcat.Delete()
 
     diagram = builder.Build()
     
@@ -238,18 +242,13 @@ def visualize_trajectory(zmq_url, traj_list, show_line = False, iiwa_ghosts = []
             X_list = ForwardKinematics(traj.vector_values(np.linspace(traj.start_time(), traj.end_time(), 15000)).T.tolist())
             X_lists.append(X_list)
             
-        c_list_hex = [0xFF0000,0x00FF00, 0x0000FF]
         c_list_rgb = [[i/255 for i in (0, 0, 255, 255)],[i/255 for i in (255, 191, 0, 255)],[i/255 for i in (255, 64, 0, 255)]]
 
-        line_type = [('line',g.MeshBasicMaterial), ('phong',g.MeshPhongMaterial), ('lambert',g.MeshLambertMaterial)]
-        
         for i, X_list in enumerate(X_lists):
-            vertices = list(map(lambda X: X.translation(), X_list))
-            colors = [np.array(c_list_rgb[i]) for _ in range(len(X_list))]
-            vertices = np.stack(vertices).astype(np.float32).T
-            colors = np.array(colors).astype(np.float32).T
-            vis["paths"][str(i)].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
-                                            g.PointsMaterial(size=0.015)))
+            pointcloud = PointCloud(len(X_list))
+            pointcloud.mutable_xyzs()[:] = np.array(list(map(lambda X: X.translation(), X_list))).T[:]
+            meshcat.SetObject("paths/" + str(i), pointcloud, 0.015,
+                              rgba=Rgba(*c_list_rgb[i]))
         
         
         reg_colors = plt.cm.viridis(np.linspace(0, 1,len(regions)))
@@ -257,16 +256,12 @@ def visualize_trajectory(zmq_url, traj_list, show_line = False, iiwa_ghosts = []
         
         for i, reg in enumerate(regions):
             X_reg = ForwardKinematics(spider_web(reg))
-            vertices = list(map(lambda X: X.translation(), X_reg))
-            colors = [reg_colors[i] for _ in range(len(X_reg))]
-            vertices = np.stack(vertices).astype(np.float32).T
-            colors = np.array(colors).astype(np.float32).T
-            vis["regions"][str(i)].set_object(g.Points(g.PointsGeometry(vertices, color=colors),
-                                                       g.PointsMaterial(size=0.015)))
+            pointcloud = PointCloud(len(reg))
+            pointcloud.mutable_xyzs()[:] = np.array(list(map(lambda X: X.translation(), X_reg))).T[:]
+            meshcat.SetObject("regions/" + str(i), pointcloud, 0.015,
+                              rgba=Rgba(*reg_colors[i]))
         
-    visualizer.load()
     simulator = Simulator(diagram)
-    visualizer.start_recording()
+    meshcat_cpp.StartRecording()
     simulator.AdvanceTo(combined_traj.end_time())
-    visualizer.publish_recording()
-    return vis
+    meshcat_cpp.PublishRecording()

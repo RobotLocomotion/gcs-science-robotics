@@ -15,7 +15,6 @@
           <izz>0.164814</izz>
         </inertia>
       </inertial>
-      <self_collide>0</self_collide>
       <kinematic>0</kinematic>
       <visual name="visual">
         <geometry>
@@ -30,7 +29,6 @@
       </visual>
       <collision name="body_collision">
         <laser_retro>0</laser_retro>
-        <max_contacts>10</max_contacts>
         <geometry>
           <box>
             <size>0.146 0.0725 0.05</size>
@@ -99,7 +97,6 @@
           <izz>0.16</izz>
         </inertia>
       </inertial>
-      <self_collide>0</self_collide>
       <kinematic>0</kinematic>
       <visual name="visual">
         <geometry>
@@ -114,7 +111,6 @@
       </visual>
       <collision name="left_collision">
         <laser_retro>0</laser_retro>
-        <max_contacts>10</max_contacts>
         <geometry>
           <box>
             <size>0.012 0.082 0.02</size>
@@ -180,7 +176,6 @@
           <izz>0.16</izz>
         </inertia>
       </inertial>
-      <self_collide>0</self_collide>
       <kinematic>0</kinematic>
       <visual name="visual">
         <geometry>
@@ -195,7 +190,6 @@
       </visual>
       <collision name="right_collision">
         <laser_retro>0</laser_retro>
-        <max_contacts>10</max_contacts>
         <geometry>
           <box>
             <size>0.012 0.082 0.02</size>
@@ -257,6 +251,5 @@
       <child>right_finger</child>
     </joint>
     <static>0</static>
-    <allow_auto_disable>1</allow_auto_disable>
   </model>
 </sdf>
