@@ -21,6 +21,8 @@ class LinearGCS(BaseGCS):
 
         if path_weights is None:
             path_weights = np.ones(self.dimension)
+        elif isinstance(path_weights, float) or isinstance(path_weights, int):
+            path_weights = path_weights * np.ones(self.dimension)
         assert len(path_weights) == self.dimension
 
         self.edge_cost = L2NormCost(

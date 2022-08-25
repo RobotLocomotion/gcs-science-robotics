@@ -50,9 +50,10 @@ class BezierGCS(BaseGCS):
         b_time = np.concatenate((1e3*np.ones(order + 1), np.zeros(order + 1), -hdot_min * np.ones(order)))
         self.time_scaling_set = HPolyhedron(A_time, b_time)
 
-        for r in self.regions:
+        for i, r in enumerate(self.regions):
             self.gcs.AddVertex(
-                r.CartesianPower(order + 1).CartesianProduct(self.time_scaling_set))
+                r.CartesianPower(order + 1).CartesianProduct(self.time_scaling_set),
+                name = self.names[i] if not self.names is None else '')
 
         # Formulate edge costs and constraints
         u_control = MakeMatrixContinuousVariable(
@@ -129,12 +130,16 @@ class BezierGCS(BaseGCS):
             edge.AddCost(Binding[Cost](time_cost, edge.xu()))
 
     def addPathLengthCost(self, weight):
-        assert isinstance(weight, float) or isinstance(weight, int)
+        if isinstance(weight, float) or isinstance(weight, int):
+            weight_matrix = weight * np.eye(self.dimension)
+        else:
+            assert(len(weight) == self.dimension)
+            weight_matrix = np.diag(weight)
 
         u_path_control = self.u_r_trajectory.MakeDerivative(1).control_points()
         for ii in range(len(u_path_control)):
             H = DecomposeLinearExpressions(u_path_control[ii] / self.order, self.u_vars)
-            path_cost = L2NormCost(weight * H, np.zeros(self.dimension))
+            path_cost = L2NormCost(np.matmul(weight_matrix, H), np.zeros(self.dimension))
             self.edge_costs.append(path_cost)
 
             for edge in self.gcs.Edges():
@@ -143,7 +148,11 @@ class BezierGCS(BaseGCS):
                 edge.AddCost(Binding[Cost](path_cost, edge.xu()))
 
     def addPathLengthIntegralCost(self, weight, integration_points=100):
-        assert isinstance(weight, float) or isinstance(weight, int)
+        if isinstance(weight, float) or isinstance(weight, int):
+            weight_matrix = weight * np.eye(self.dimension)
+        else:
+            assert(len(weight) == self.dimension)
+            weight_matrix = np.diag(weight)
 
         s_points = np.linspace(0., 1., integration_points + 1)
         u_path_deriv = self.u_r_trajectory.MakeDerivative(1)
@@ -155,7 +164,7 @@ class BezierGCS(BaseGCS):
                 for ii in range(self.dimension):
                     costs.append(q_ds[ii])
                 H = DecomposeLinearExpressions(costs, self.u_vars)
-                integral_cost = L2NormCost(weight * H, np.zeros(self.dimension))
+                integral_cost = L2NormCost(np.matmul(weight_matrix, H), np.zeros(self.dimension))
                 self.edge_costs.append(integral_cost)
 
                 for edge in self.gcs.Edges():
@@ -172,7 +181,7 @@ class BezierGCS(BaseGCS):
                     else:
                         costs.append(1./integration_points * q_ds[jj, ii])
                 H = DecomposeLinearExpressions(costs, self.u_vars)
-                integral_cost = L2NormCost(weight * H, np.zeros(self.dimension))
+                integral_cost = L2NormCost(np.matmul(weight_matrix, H), np.zeros(self.dimension))
                 self.edge_costs.append(integral_cost)
 
                 for edge in self.gcs.Edges():
@@ -181,14 +190,18 @@ class BezierGCS(BaseGCS):
                     edge.AddCost(Binding[Cost](integral_cost, edge.xu()))
 
     def addPathEnergyCost(self, weight):
-        assert isinstance(weight, float) or isinstance(weight, int)
+        if isinstance(weight, float) or isinstance(weight, int):
+            weight_matrix = weight * np.eye(self.dimension)
+        else:
+            assert(len(weight) == self.dimension)
+            weight_matrix = np.diag(weight)
 
         u_path_control = self.u_r_trajectory.MakeDerivative(1).control_points()
         u_time_control = self.u_h_trajectory.MakeDerivative(1).control_points()
         for ii in range(len(u_path_control)):
             A_ctrl = DecomposeLinearExpressions(u_path_control[ii], self.u_vars)
             b_ctrl = DecomposeLinearExpressions(u_time_control[ii], self.u_vars)
-            H = np.vstack(((self.order) * b_ctrl, np.sqrt(weight) * A_ctrl))
+            H = np.vstack(((self.order) * b_ctrl, np.matmul(np.sqrt(weight_matrix), A_ctrl)))
             energy_cost = PerspectiveQuadraticCost(H, np.zeros(H.shape[0]))
             self.edge_costs.append(energy_cost)
 
