@@ -8,6 +8,7 @@ from pydrake.planning.common_robotics_utilities import (
     NNDistanceDirection,
     ShortcutSmoothPath,
     SimpleRRTPlannerState,
+    SimpleRRTPlannerTree,
     MakeKinematicLinearBiRRTNearestNeighborsFunction,
     MakeKinematicBiRRTExtendPropagationFunction,
     MakeKinematicBiRRTConnectPropagationFunction,
@@ -28,7 +29,6 @@ class ClassicalPlanning:
         self.PositionUpperLimits = self.plant.GetPositionUpperLimits()
         self.PositionLowerLimits = self.plant.GetPositionLowerLimits()
 
-        self.RNG = RandomGenerator(seed)
         np.random.seed(seed)
 
     def make_context(self):
@@ -78,7 +78,7 @@ class ClassicalPlanning:
                                               self.check_edge_validity_fn, 
                                               self.distance_fn,
                                               self.InterpolateWaypoint,
-                                              self.RNG)
+                                              np.random.rand)
         return shortcutted_path
  
 
@@ -126,7 +126,7 @@ class PRM(ClassicalPlanning):
             prm_path = QueryPath([start_pt], [goal_pt], self.roadmap, self.distance_fn,
                     self.check_edge_validity_fn, self.K,
                     use_parallel=False,
-                    distance_is_symmetric=True,
+                    connection_is_symmetric=True,
                     add_duplicate_states=False,
                     limit_astar_pqueue_duplicates=True).Path()
             
@@ -265,15 +265,19 @@ class BiRRT(ClassicalPlanning):
             return None
 
         connect_result = BiRRTPlanSinglePath(
-                start_tree=start_tree, goal_tree=end_tree,
+                start_tree=SimpleRRTPlannerTree(start_tree),
+                goal_tree=SimpleRRTPlannerTree(end_tree),
                 state_sampling_fn=birrt_sampling,
                 nearest_neighbor_fn=nearest_neighbor_fn, propagation_fn=propagate_fn,
                 state_added_callback_fn=None,
                 states_connected_fn=self.states_connected_fn,
                 goal_bridge_callback_fn=goal_bridge_fn,
                 tree_sampling_bias=0.5, p_switch_tree=0.25,
-                termination_check_fn=termination_fn, rng=self.RNG)
-        return connect_result, start_tree_extended, end_tree_extended
+                termination_check_fn=termination_fn,
+                uniform_unit_real_fn=np.random.rand)
+        return (connect_result,
+                start_tree_extended.GetNodesImmutable(),
+                end_tree_extended.GetNodesImmutable())
 
     def getPath(self, sequence, verbose = False, path_processing = lambda path: path):
         path = [sequence[0]]

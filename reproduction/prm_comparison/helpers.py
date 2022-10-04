@@ -8,7 +8,7 @@ from pydrake.multibody.parsing import LoadModelDirectives, Parser, ProcessModelD
 from pydrake.common import FindResourceOrThrow
 from pydrake.geometry import (
     IllustrationProperties,
-    MeshcatVisualizerCpp,
+    MeshcatVisualizer,
     MeshcatVisualizerParams,
     Rgba,
     RoleAssign,
@@ -230,7 +230,7 @@ def visualize_trajectory(meshcat, traj_list, show_line = False, iiwa_ghosts = []
     meshcat_params.delete_on_initialization_event = False
     meshcat_params.role = Role.kIllustration
     # meshcat_params.role = Role.kProximity
-    meshcat_cpp = MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat, meshcat_params)
+    meshcat_cpp = MeshcatVisualizer.AddToBuilder(builder, scene_graph, meshcat, meshcat_params)
     meshcat.Delete()
 
     diagram = builder.Build()

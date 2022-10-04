@@ -7,7 +7,7 @@ from pydrake.common import FindResourceOrThrow
 from pydrake.geometry import (
     CollisionFilterDeclaration,
     GeometrySet,
-    MeshcatVisualizerCpp,
+    MeshcatVisualizer,
     Rgba,
     Role,
     SceneGraph
@@ -311,7 +311,7 @@ def getLinearGcsPath(regions, sequence):
             print(f"Failed between {start_pt} and {goal_pt}")
             return None
         print(f"Planned segment in {np.round(time.time() - start_time, 4)}", flush=True)
-        run_time += results_dict["preprocessing_stats"]['linear_programs']
+        # run_time += results_dict["preprocessing_stats"]['linear_programs']
         run_time += results_dict["relaxation_solver_time"]
         run_time += results_dict["total_rounded_solver_time"]
         
@@ -342,7 +342,7 @@ def getBezierGcsPath(plant, regions, sequence, order, continuity, hdot_min = 1e-
             print(f"Failed between {start_pt} and {goal_pt}")
             return None
         print(f"Planned segment in {np.round(time.time() - start_time, 4)}", flush=True)
-        segment_run_time += results_dict["preprocessing_stats"]['linear_programs']
+        # segment_run_time += results_dict["preprocessing_stats"]['linear_programs']
         segment_run_time += results_dict["relaxation_solver_time"]
         segment_run_time += results_dict["total_rounded_solver_time"]
         trajectories.append(segment_traj)
@@ -401,7 +401,7 @@ def visualize_trajectory(traj, meshcat):
         end_time = traj.end_time()
     builder.Connect(traj_system.get_output_port(), to_pose.get_input_port())
 
-    meshcat_cpp = MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
+    meshcat_viz = MeshcatVisualizer.AddToBuilder(builder, scene_graph, meshcat)
     meshcat.Delete()
 
     vis_diagram = builder.Build()
@@ -432,9 +432,9 @@ def visualize_trajectory(traj, meshcat):
         meshcat.SetObject("paths/iiwa_2", iiwa2_pointcloud, 0.015,
                             rgba=Rgba(*rgb_color))
 
-    meshcat_cpp.StartRecording()
+    meshcat_viz.StartRecording()
     simulator.AdvanceTo(end_time)
-    meshcat_cpp.PublishRecording()
+    meshcat_viz.PublishRecording()
 
 def generate_segment_pics(traj, segment, meshcat):
     builder = DiagramBuilder()
@@ -472,7 +472,7 @@ def generate_segment_pics(traj, segment, meshcat):
 
     plant.Finalize()
 
-    meshcat_cpp = MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
+    meshcat_viz = MeshcatVisualizer.AddToBuilder(builder, scene_graph, meshcat)
     meshcat.Delete()
 
     diagram = builder.Build()
