@@ -12,29 +12,14 @@ Note: The PRM and Bimanual reproductions do not yet work on Deepnote and the UAV
 ## Running locally
 
 ### Installing Dependencies
-This code depends on [Drake](https://drake.mit.edu), specifically its Python bindings. To install the bindings and other dependencies, run
+This code depends on [Drake](https://drake.mit.edu), specifically its Python bindings. To install Drake bindings follow the instruction on [Drake's Installation Page](https://drake.mit.edu/installation.html). Any of the installation methods listed should work.  You can check that the installation was sucessful by following the instruction [here](https://drake.mit.edu/python_bindings.html#using-the-python-bindings).
 
+We have used Mosek to solve most of the examples. To solve using Mosek, you'll need to give Drake access to a Mosek license file as described [here](https://drake.mit.edu/bazel.html#mosek). Mosek provides a personal academic license for free.
+
+You will also need to install `gcs` and its dependencies. You can do this by running
 ```
 pip install -r requirements.txt
 ```
-
-Drake also requires a couple additional libraries.  To install them follow the below instuctions.
-
-For Ubuntu 20.04:
-```
-sudo apt-get update
-sudo apt-get install --no-install-recommends \
-  libpython3.8 libx11-6 libsm6 libxt6 libglib2.0-0
-```
-
-### Confirming Drake bindings are accessible to Python
-To confirm that the Drake bindings are accessible, and that you are using the right set of bindings run
-
-```
-python3 -c 'import pydrake.all; print(pydrake.__file__)'
-```
-
-and confirm that the printed path matches the expected location of the Python bindings.
 
 ### Running Examples
 Once all the dependencies have been installed, you can run the examples with jupyter notebooks which can be launched by calling
