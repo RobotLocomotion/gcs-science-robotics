@@ -3,7 +3,7 @@
 This code has been updated since the Arxiv paper was published. The code used to run the examples in that paper can be found under the [`arxiv_paper_version`](https://github.com/mpetersen94/gcs/releases/tag/arxiv_paper_version) tag. That version was tested to work with Drake version 1.3 (although version up to 1.8 should work with some deprecation warnings).
 
 ## Running via Deepnote
-Most of the examples and reproductions can be run on [Deepnote](https://deepnote.com/workspace/mark-petersen-2785519d-2c3e-430b-9a10-a1754f2de37d/project/GCS-Motion-Planning-around-Obstacles-with-Convex-Optimization-Duplicate-Duplicate-3afac8e3-cbc0-41d1-9afb-0d38dfbe9ffa).
+Most of the examples and reproductions can be run on [Deepnote](https://deepnote.com/workspace/mark-petersen-2785519d-2c3e-430b-9a10-a1754f2de37d/project/GCS-Motion-Planning-around-Obstacles-with-Convex-Optimization-3afac8e3-cbc0-41d1-9afb-0d38dfbe9ffa/).
 
 After duplicating the project into your own account, be sure to run the `MosekLicenseUpload.ipynb` notebook to make your Mosek License available for solving the optimization problems.
 
