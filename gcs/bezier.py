@@ -66,18 +66,18 @@ class BezierGCS(BaseGCS):
         self.u_vars = np.concatenate((u_control.flatten("F"), u_duration))
         self.u_r_trajectory = BsplineTrajectory_[Expression](
             BsplineBasis_[Expression](order + 1, order + 1, KnotVectorType.kClampedUniform, 0., 1.),
-            list(u_control.T))
+            u_control)
         self.u_h_trajectory = BsplineTrajectory_[Expression](
             BsplineBasis_[Expression](order + 1, order + 1, KnotVectorType.kClampedUniform, 0., 1.),
-            list(np.expand_dims(u_duration, 1)))
+            np.expand_dims(u_duration, 0))
 
         edge_vars = np.concatenate((u_control.flatten("F"), u_duration, v_control.flatten("F"), v_duration))
         v_r_trajectory = BsplineTrajectory_[Expression](
             BsplineBasis_[Expression](order + 1, order + 1, KnotVectorType.kClampedUniform, 0., 1.),
-            list(v_control.T))
+            v_control)
         v_h_trajectory = BsplineTrajectory_[Expression](
             BsplineBasis_[Expression](order + 1, order + 1, KnotVectorType.kClampedUniform, 0., 1.),
-            list(np.expand_dims(v_duration, 1)))
+            np.expand_dims(v_duration, 0))
 
         # Continuity constraints
         self.contin_constraints = []
@@ -343,6 +343,9 @@ class BezierGCS(BaseGCS):
         offset = time_control_points[0].copy()
         for ii in range(len(time_control_points)):
             time_control_points[ii] -= offset
+
+        path_control_points = np.array(path_control_points).T
+        time_control_points = np.array(time_control_points).T
 
         path = BsplineTrajectory(BsplineBasis(self.order + 1, knots), path_control_points)
         time_traj = BsplineTrajectory(BsplineBasis(self.order + 1, knots), time_control_points)
