@@ -17,8 +17,7 @@ from pydrake.multibody.inverse_kinematics import InverseKinematics
 from pydrake.multibody.parsing import LoadModelDirectives, Parser, ProcessModelDirectives
 from pydrake.multibody.plant import AddMultibodyPlantSceneGraph, MultibodyPlant
 from pydrake.perception import PointCloud
-from pydrake.solvers.mathematicalprogram import Solve
-from pydrake.solvers.mosek import MosekSolver
+from pydrake.solvers import MosekSolver, Solve
 from pydrake.systems.analysis import Simulator
 from pydrake.systems.framework import DiagramBuilder, LeafSystem
 from pydrake.systems.primitives import TrajectorySource

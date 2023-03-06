@@ -12,7 +12,7 @@ from pydrake.math import (
     BsplineBasis_,
     KnotVectorType,
 )
-from pydrake.solvers.mathematicalprogram import(
+from pydrake.solvers import(
     Binding,
     Constraint,
     Cost,

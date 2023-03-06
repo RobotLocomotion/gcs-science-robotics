@@ -4,7 +4,7 @@ import pickle
 import time
 
 from pydrake.systems.framework import LeafSystem
-from pydrake.solvers.mosek import MosekSolver
+from pydrake.solvers import MosekSolver
 
 from gcs.bezier import BezierGCS
 from gcs.rounding import *
