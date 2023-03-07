@@ -23,7 +23,7 @@ from pydrake.multibody.tree import RevoluteJoint
 from pydrake.trajectories import PiecewisePolynomial
 from pydrake.systems.analysis import Simulator
 from pydrake.multibody import inverse_kinematics
-from pydrake.solvers.mathematicalprogram import Solve
+from pydrake.solvers import Solve
 
 from reproduction.util import *
 

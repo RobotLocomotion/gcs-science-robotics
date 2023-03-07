@@ -6,13 +6,14 @@ from pydrake.geometry.optimization import (
     GraphOfConvexSetsOptions,
     Point,
 )
-from pydrake.solvers.mathematicalprogram import (
+from pydrake.solvers import (
     CommonSolverOption,
+    GurobiSolver,
+    MathematicalProgram,
+    MosekSolver,
     SolverOptions,
 )
-from pydrake.solvers.gurobi import GurobiSolver
-from pydrake.solvers.mosek import MosekSolver
-from pydrake.all import MathematicalProgram, le
+from pydrake.all import le
 
 from gcs.rounding import MipPathExtraction
 

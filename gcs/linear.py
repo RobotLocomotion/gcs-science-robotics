@@ -5,7 +5,7 @@ import time
 from pydrake.geometry.optimization import (
     Point,
 )
-from pydrake.solvers.mathematicalprogram import (
+from pydrake.solvers import (
     Binding,
     Constraint,
     Cost,
