@@ -293,7 +293,7 @@ def runBimanualIK(plant, context, wsg1_id, wsg2_id, wsg1_pose, wsg2_pose,
 def visualizeConfig(diagram, plant, context, q):
     plant_context = plant.GetMyMutableContextFromRoot(context)
     plant.SetPositions(plant_context, q)
-    diagram.Publish(context)
+    diagram.ForcedPublish(context)
 
 def getLinearGcsPath(regions, sequence):
     path = [sequence[0]]
@@ -506,4 +506,4 @@ def generate_segment_pics(traj, segment, meshcat):
                             rgba=Rgba(0, 0, 1, 1))
 
     plant.SetPositions(plant_context, np.concatenate((q_waypoints[:, 0], q_waypoints[:, -1])))
-    diagram.Publish(context)
+    diagram.ForcedPublish(context)
