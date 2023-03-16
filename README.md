@@ -32,7 +32,7 @@ from inside this repository.
 If you want to compare GCS to sampling based planners (such as PRM), you'll need to install a custom fork of drake that includes bindings for sampling based planners.  To do this run the following, including any of the proprietary solvers you have access to.
 
 ```
-git clone -b gcs2 git@github.com:mpetersen94/drake.git
+git clone -b gcs_paper git@github.com:wrangelvid/drake.git
 mkdir drake-build
 cd drake-build
 cmake -DWITH_MOSEK=ON [-DWITH_GUROBI=ON -DWITH_ROBOTLOCOMOTION_SNOPT=ON] ../drake
