@@ -1,0 +1,89 @@
+# Model directive for iiwa with sphere collision and welded gripper
+directives:
+
+# Add iiwa
+- add_model:
+    name: iiwa
+    file: package://drake/manipulation/models/iiwa_description/urdf/iiwa14_spheres_collision.urdf
+
+- add_weld:
+    parent: world
+    child: iiwa::base
+
+# Add schunk
+- add_model:
+    name: wsg
+    file: package://drake/manipulation/models/wsg_50_description/sdf/schunk_wsg_50_welded_fingers.sdf
+
+- add_frame:
+    name: iiwa::wsg_attach
+    X_PF:
+      base_frame: iiwa::iiwa_link_7
+      translation: [0, 0, 0.114]
+      rotation: !Rpy { deg: [90.0, 0.0, 0.0 ]}
+
+- add_weld:
+    parent: iiwa::wsg_attach
+    child: wsg::body
+
+# Add shelves
+- add_model:
+    name: shelves
+    file: package://gcs/models/shelves/shelves.sdf
+
+- add_frame:
+    name: shelf_origin
+    X_PF:
+      base_frame: world
+      translation: [0.85, 0, 0.4]
+
+- add_weld:
+    parent: shelf_origin
+    child: shelves::shelves_body
+
+# Add Bins
+- add_model:
+    name: binR
+    file: package://gcs/models/bin/bin.sdf
+
+- add_frame:
+    name: bin_originR
+    X_PF:
+      base_frame: world
+      translation: [0, -0.6, 0]
+      rotation: !Rpy { deg: [0.0, 0.0, 90.0 ]}
+
+- add_weld:
+    parent: bin_originR
+    child: binR::bin_base
+
+- add_model:
+    name: binL
+    file: package://gcs/models/bin/bin.sdf
+
+- add_frame:
+    name: bin_originL
+    X_PF:
+      base_frame: world
+      translation: [0, 0.6, 0]
+      rotation: !Rpy { deg: [0.0, 0.0, 90.0 ]}
+
+- add_weld:
+    parent: bin_originL
+    child: binL::bin_base
+
+# Add table
+- add_model:
+    name: table
+    file: package://gcs/models/table/table_wide.sdf
+
+- add_frame:
+    name: table_origin
+    X_PF:
+      base_frame: world
+      translation: [0.4, 0.0, 0.0]
+      rotation: !Rpy { deg: [0., 0., 00]}
+
+- add_weld:
+    parent: table_origin
+    child: table::table_body

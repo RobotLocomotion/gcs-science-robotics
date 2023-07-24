@@ -26,7 +26,7 @@ from pydrake.systems.rendering import MultibodyPositionToGeometryPose
 from gcs.bezier import BezierGCS
 from gcs.linear import LinearGCS
 from gcs.rounding import *
-from reproduction.prm_comparison.helpers import lower_alpha
+from reproduction.prm_comparison.helpers import set_transparency_of_models
 from reproduction.util import *
 
 def getIkSeeds():
@@ -293,7 +293,7 @@ def runBimanualIK(plant, context, wsg1_id, wsg2_id, wsg1_pose, wsg2_pose,
 def visualizeConfig(diagram, plant, context, q):
     plant_context = plant.GetMyMutableContextFromRoot(context)
     plant.SetPositions(plant_context, q)
-    diagram.Publish(context)
+    diagram.ForcedPublish(context)
 
 def getLinearGcsPath(regions, sequence):
     path = [sequence[0]]
@@ -467,7 +467,7 @@ def generate_segment_pics(traj, segment, meshcat):
     arm_models = [iiwa1_start.model_instance, wsg1_start.model_instance,
                   iiwa2_start.model_instance, wsg2_start.model_instance,
                   iiwa1_goal, wsg1_goal, iiwa2_goal, wsg2_goal]
-    lower_alpha(plant, scene_graph.model_inspector(), arm_models, 0.4, scene_graph)
+    set_transparency_of_models(plant, arm_models, 0.4, scene_graph)
 
     plant.Finalize()
 
@@ -506,4 +506,4 @@ def generate_segment_pics(traj, segment, meshcat):
                             rgba=Rgba(0, 0, 1, 1))
 
     plant.SetPositions(plant_context, np.concatenate((q_waypoints[:, 0], q_waypoints[:, -1])))
-    diagram.Publish(context)
+    diagram.ForcedPublish(context)

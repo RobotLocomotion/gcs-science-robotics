@@ -3,7 +3,6 @@
 /bazel-*
 /build/
 /cmake-build-*/
-/data/
 /.vscode
 
 models/room_gen/building.sdf
