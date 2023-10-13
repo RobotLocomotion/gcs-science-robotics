@@ -17,28 +17,39 @@ Note: The PRM and Bimanual reproductions do not yet work on Deepnote and the UAV
 
 ## Running locally
 
-### Installing Dependencies
-This code depends on [Drake](https://drake.mit.edu), specifically its Python bindings. To install Drake bindings follow the instruction on [Drake's Installation Page](https://drake.mit.edu/installation.html). Any of the installation methods listed should work.  You can check that the installation was sucessful by following the instruction [here](https://drake.mit.edu/python_bindings.html#using-the-python-bindings).
+### Option 1: Docker
+We provide a [dockerfile](docker/deepnote/Dockerfile) with a custom build of [Drake](https://drake.mit.edu) that entails sampling based planners for the comparison. Note that the docker does not include a build of Gurobi, which has been only used in the Iris region generation.
 
-We have used Mosek to solve most of the examples. To solve using Mosek, you'll need to give Drake access to a Mosek license file as described [here](https://drake.mit.edu/bazel.html#mosek). Mosek provides a personal academic license for free.
-
-You will also need to install `gcs` and its dependencies. You can do this by running
-```
-pip install -r requirements.txt
+Pull the docker:
+```sh
+docker pull wrangelvid/drake:gcs-science-robotics
 ```
 
-### Running Examples
-Once all the dependencies have been installed, you can run the examples with jupyter notebooks which can be launched by calling
+Run the docker:
+```sh
+docker run -i -p 7000:7000 -p 8888:8888 -w /gcs-science-robotics -t wrangelvid/drake:gcs-science-robotics
 ```
-jupyter-notebook
-```
-from inside this repository.
 
-### Running the Sampling Based Comparison
-If you want to compare GCS to sampling based planners (such as PRM), you'll need to install a custom fork of drake that includes bindings for sampling based planners.  To do this run the following, including any of the proprietary solvers you have access to.
+In another shell, copy over your mosek license:
+
+```sh
+docker cp [PATH_TO_MOSEK.lic] [container_id]:/tmp/mosek.lic
+```
+
+Once the docker has been build and run, you can run the examples with jupyter notebooks:
+
+In the docker run the jupyter server:
+```sh
+jupyter notebook --ip 0.0.0.0 --no-browser --allow-root --NotebookApp.token=''
+```
+
+On your machine go to http://localhost:8888/ You will find the reproduction notebooks in the reproduction folder.
+
+### Option 2: Local Installation
+If you want to compare GCS to sampling based planners (such as PRM), you'll need to install a custom fork of [Drake](https://drake.mit.edu) that includes bindings for sampling based planners.  To do this run the following, including any of the proprietary solvers you have access to. You may build it with Gurobi.
 
 ```
-git clone -b gcs_paper git@github.com:wrangelvid/drake.git
+git clone -b gcs-science-robotics git@github.com:wrangelvid/drake.git
 mkdir drake-build
 cd drake-build
 cmake -DWITH_MOSEK=ON [-DWITH_GUROBI=ON -DWITH_ROBOTLOCOMOTION_SNOPT=ON] ../drake
@@ -58,3 +69,16 @@ For macOS:
 cd drake-build
 export PYTHONPATH=${PWD}/install/lib/python3.9/site-packages:$PYTHONPATH
 ```
+
+We have used Mosek to solve most of the examples. To solve using Mosek, you'll need to give Drake access to a Mosek license file as described [here](https://drake.mit.edu/bazel.html#mosek). Mosek provides a personal academic license for free.
+
+You will also need to install `gcs-science-robotics` and its dependencies. From inside this repository, run the following:
+```
+pip install -e .
+```
+
+Once all the dependencies have been installed, you can run the examples with jupyter notebooks which can be launched by calling
+```
+jupyter-notebook
+```
+from inside this repository.
