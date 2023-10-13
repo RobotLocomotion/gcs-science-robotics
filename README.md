@@ -1,4 +1,10 @@
-# GCS - Motion Planning around Obstacles with Convex Optimization
+# Motion Planning around Obstacles with Convex Optimization
+
+This repository contains the code to reproduce the examples in the paper [Motion Planning around Obstacles with Convex Optimization](https://arxiv.org/abs/2106.09610) by Tobia Marcucci, Mark Petersen, David von Wrangel, and Russ Tedrake.
+
+To use [Graphs of Convex Sets (GCS) Trajectory Optimization](https://drake.mit.edu/doxygen_cxx/classdrake_1_1planning_1_1trajectory__optimization_1_1_gcs_trajectory_optimization.html) in your own code, we recommend that you use the version in [Drake](http://drake.mit.edu), which is being actively developed and improved.
+
+## Versions
 
 This code has been updated since the Arxiv paper was published. The code used to run the examples in that paper can be found under the [`arxiv_paper_version`](https://github.com/mpetersen94/gcs/releases/tag/arxiv_paper_version) tag. That version was tested to work with Drake version 1.3 (although version up to 1.8 should work with some deprecation warnings).
 
