@@ -4,16 +4,12 @@ This repository contains the code to reproduce the examples in the paper [Motion
 
 To use [Graphs of Convex Sets (GCS) Trajectory Optimization](https://drake.mit.edu/doxygen_cxx/classdrake_1_1planning_1_1trajectory__optimization_1_1_gcs_trajectory_optimization.html) in your own code, we recommend that you use the version in [Drake](http://drake.mit.edu), which is being actively developed and improved.
 
-## Versions
-
-This code has been updated since the Arxiv paper was published. The code used to run the examples in that paper can be found under the [`arxiv_paper_version`](https://github.com/mpetersen94/gcs/releases/tag/arxiv_paper_version) tag. That version was tested to work with Drake version 1.3 (although version up to 1.8 should work with some deprecation warnings).
-
 ## Running via Deepnote
-Most of the examples and reproductions can be run on [Deepnote](https://deepnote.com/workspace/mark-petersen-2785519d-2c3e-430b-9a10-a1754f2de37d/project/GCS-Motion-Planning-around-Obstacles-with-Convex-Optimization-3afac8e3-cbc0-41d1-9afb-0d38dfbe9ffa/).
+Most of the examples and reproductions can be run on [Deepnote](https://deepnote.com/workspace/Manipulation-ac8201a1-470a-4c77-afd0-2cc45bc229ff/project/GCS-Motion-Planning-around-Obstacles-with-Convex-Optimization-3e7290e8-b92c-4efc-9b58-28a724a78142).
 
 After duplicating the project into your own account, be sure to run the `MosekLicenseUpload.ipynb` notebook to make your Mosek License available for solving the optimization problems.
 
-Note: The PRM and Bimanual reproductions do not yet work on Deepnote and the UAV and Maze reproductions have been shrunk in size to avoid hitting memory limits on Deepnote.
+Note: The Bimanual reproductions do not yet work on Deepnote and the UAV and Maze reproductions have been shrunk in size to avoid hitting memory limits on Deepnote.
 
 ## Running locally
 
@@ -44,6 +40,8 @@ jupyter notebook --ip 0.0.0.0 --no-browser --allow-root --NotebookApp.token=''
 ```
 
 On your machine go to http://localhost:8888/ You will find the reproduction notebooks in the reproduction folder.
+
+Note: The instructions here use port 7000 for meshcat (robot visualization) and 8888 for jupyter. If these ports are already in use on your machine, you can change the `-p` flag in the `docker run` command above; for instance use `-p 7001:7000` to map the docker port 7000 to your localhost 7001 for meshcat.
 
 ### Option 2: Local Installation
 If you want to compare GCS to sampling based planners (such as PRM), you'll need to install a custom fork of [Drake](https://drake.mit.edu) that includes bindings for sampling based planners.  To do this run the following, including any of the proprietary solvers you have access to. You may build it with Gurobi.
