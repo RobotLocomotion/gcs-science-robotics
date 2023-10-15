@@ -45,6 +45,8 @@ jupyter notebook --ip 0.0.0.0 --no-browser --allow-root --NotebookApp.token=''
 
 On your machine go to http://localhost:8888/ You will find the reproduction notebooks in the reproduction folder.
 
+Note: The instructions here use port 7000 for meshcat (robot visualization) and 8888 for jupyter. If these ports are already in use on your machine, you can change the `-p` flag in the `docker run` command above; for instance use `-p 7001:7000` to map the docker port 7000 to your localhost 7001 for meshcat.
+
 ### Option 2: Local Installation
 If you want to compare GCS to sampling based planners (such as PRM), you'll need to install a custom fork of [Drake](https://drake.mit.edu) that includes bindings for sampling based planners.  To do this run the following, including any of the proprietary solvers you have access to. You may build it with Gurobi.
 
