@@ -8,7 +8,6 @@ from pydrake.geometry.optimization import (
 )
 from pydrake.solvers import (
     CommonSolverOption,
-    GurobiSolver,
     MathematicalProgram,
     MosekSolver,
     SolverOptions,
@@ -155,8 +154,6 @@ class BaseGCS:
         solver_options.SetOption(MosekSolver.id(), "MSK_IPAR_INTPNT_SOLVE_FORM", 1)
         solver_options.SetOption(MosekSolver.id(), "MSK_DPAR_MIO_TOL_REL_GAP", 1e-3)
         solver_options.SetOption(MosekSolver.id(), "MSK_DPAR_MIO_MAX_TIME", 3600.0)
-        solver_options.SetOption(GurobiSolver.id(), "MIPGap", 1e-3)
-        solver_options.SetOption(GurobiSolver.id(), "TimeLimit", 3600.0)
         self.options.solver_options = solver_options
 
     def setRoundingStrategy(self, rounding_fn, **kwargs):
