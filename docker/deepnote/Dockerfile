@@ -52,7 +52,7 @@ RUN apt-get update \
 
 RUN apt-get -q update && apt-get -q install -y --no-install-recommends git nginx-light xvfb && apt-get -q clean
 RUN pip3 install lxml matplotlib networkx numpy pandas pydot scipy
-RUN pip3 install -I ipywidgets
+RUN pip3 install -I ipywidgets==7.5.1
 RUN pip3 install jupyter_server
 RUN pip3 install --upgrade notebook
 
