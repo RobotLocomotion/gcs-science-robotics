@@ -2,7 +2,17 @@
 
 This repository contains the code to reproduce the examples in the paper [Motion Planning around Obstacles with Convex Optimization](https://arxiv.org/abs/2205.04422) by Tobia Marcucci, Mark Petersen, David von Wrangel, and Russ Tedrake.
 
-To use [Graphs of Convex Sets (GCS) Trajectory Optimization](https://drake.mit.edu/doxygen_cxx/classdrake_1_1planning_1_1trajectory__optimization_1_1_gcs_trajectory_optimization.html) in your own code, we recommend that you use the version in [Drake](http://drake.mit.edu), which is being actively developed and improved.
+## Recommended: Mature implementation in Drake.
+
+Since the publication of this paper, we have made a mature software
+implementation (with numerous improvements) of the [GCS Trajectory Optimization
+algorithm](https://drake.mit.edu/doxygen_cxx/classdrake_1_1planning_1_1trajectory__optimization_1_1_gcs_trajectory_optimization.html)
+available in [Drake](https://drake.mit.edu). Most all of the examples from this
+paper have been reproduced and improved using the Drake implementation; they
+can be found linked from [these course
+notes](https://underactuated.mit.edu/optimization.html#gcs).
+
+To use GCS Trajectory Optimization in your own code,  we recommend that you use the version in Drake which is being actively developed and improved.
 
 ## Running via Deepnote
 Most of the examples and reproductions can be run on [Deepnote](https://deepnote.com/workspace/Manipulation-ac8201a1-470a-4c77-afd0-2cc45bc229ff/project/GCS-Motion-Planning-around-Obstacles-with-Convex-Optimization-3e7290e8-b92c-4efc-9b58-28a724a78142).
@@ -45,6 +55,8 @@ Note: The instructions here use port 7000 for meshcat (robot visualization) and 
 
 ### Option 2: Local Installation
 If you want to compare GCS to sampling based planners (such as PRM), you'll need to install a custom fork of [Drake](https://drake.mit.edu) that includes bindings for sampling based planners.  To do this run the following, including any of the proprietary solvers you have access to. You may build it with Gurobi.
+
+**Note**: This branch is not being actively maintained and will become more and more difficult to build as the surrounding libraries continue to evolve. To use Graphs of Convex Sets (GCS) Trajectory Optimization in your own code, we recommend that you use the version in Drake which is being actively developed and improved.
 
 ```
 git clone -b gcs-science-robotics git@github.com:wrangelvid/drake.git
